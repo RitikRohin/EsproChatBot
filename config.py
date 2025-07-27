@@ -8,7 +8,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 BOT_USERNAME = getenv("BOT_USERNAME", "8010493541")
 
 OWNER_ID = list(map(int, getenv("OWNER_ID", "7666870729").split()))
-AUTH_USERS = list(map(int, getenv("AUTH_USERS", "6656608288").split())) if getenv("AUTH_USERS") else []
+AUTH_USERS = list(map(int, getenv("AUTH_USERS", "7666870729").split())) if getenv("AUTH_USERS") else []
 
 # Fill Only Username Without @
 SUPPORT_GROUP = getenv("SUPPORT_GROUP", "EsproSupport")
