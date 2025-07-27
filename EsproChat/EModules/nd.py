@@ -35,7 +35,7 @@ async def check_nsfw(file_path: str):
                 form.add_field("models", "nudity,wad,offensive")
                 form.add_field("api_user", SIGHTENGINE_API_USER)
                 form.add_field("api_secret", SIGHTENGINE_API_SECRET)
-                async with session.post(url, data=form, timeout=30) as resp:
+                async with session.post(url, data=form, timeout=25) as resp:
                     return await resp.json()
     except Exception as e:
         print(f"[ERROR] Sightengine API: {e}")
@@ -74,6 +74,10 @@ async def nsfw_guard(client, message: Message):
 
     # ✅ Skip owner & authorized users
     if user.id == OWNER_ID or user.id in authorized_users:
+        return
+
+    # ✅ Skip normal static stickers (safe)
+    if message.sticker and not message.sticker.is_video and not message.sticker.is_animated:
         return
 
     # ✅ Download media
@@ -121,7 +125,14 @@ async def nsfw_guard(client, message: Message):
 
         # ✅ Stylish NSFW alert
         neko_img = await get_neko_image()
-        media_type = "Photo" if message.photo else "Video" if message.video else "GIF" if message.animation else "Sticker"
+        media_type = (
+            "Photo" if message.photo else
+            "Video Sticker" if message.sticker and message.sticker.is_video else
+            "GIF Sticker" if message.sticker and message.sticker.is_animated else
+            "GIF" if message.animation else
+            "Video" if message.video else
+            "Sticker"
+        )
 
         caption = (
             f"🚫 **NSFW Content Removed**\n\n"
@@ -163,22 +174,53 @@ async def toggle_nsfw(client, message: Message):
     nsfw_enabled[message.chat.id] = (state == "on")
     await message.reply(f"✅ NSFW filter is now **{'enabled' if state == 'on' else 'disabled'}**.")
 
-# ✅ Owner Authorization
+# ✅ Owner Authorization (Reply OR ID OR Username)
 @app.on_message(filters.command("authorize") & filters.user(OWNER_ID))
 async def authorize_user(client, message: Message):
-    if not message.reply_to_message or not message.reply_to_message.from_user:
-        return await message.reply("Reply to a user's message to authorize them.")
-    user_id = message.reply_to_message.from_user.id
-    authorized_users.add(user_id)
-    await message.reply(f"✅ User `{user_id}` has been authorized.")
+    target_id = None
 
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target_id = message.reply_to_message.from_user.id
+    elif len(message.command) > 1:
+        arg = message.command[1]
+        if arg.isdigit():
+            target_id = int(arg)
+        else:
+            try:
+                user_obj = await client.get_users(arg)
+                target_id = user_obj.id
+            except:
+                return await message.reply("❌ Invalid username or user not found.\nExample:\n`/authorize @username`\n`/authorize 123456789`")
+
+    if not target_id:
+        return await message.reply("Reply to a user or provide username/ID.\nExample:\n`/authorize @username`\n`/authorize 123456789`")
+
+    authorized_users.add(target_id)
+    await message.reply(f"✅ User `{target_id}` has been authorized.")
+
+# ✅ Owner Unauthorization (Reply OR ID OR Username)
 @app.on_message(filters.command("unauthorize") & filters.user(OWNER_ID))
 async def unauthorize_user(client, message: Message):
-    if not message.reply_to_message or not message.reply_to_message.from_user:
-        return await message.reply("Reply to a user's message to remove authorization.")
-    user_id = message.reply_to_message.from_user.id
-    if user_id in authorized_users:
-        authorized_users.remove(user_id)
-        await message.reply(f"❌ User `{user_id}` authorization removed.")
+    target_id = None
+
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target_id = message.reply_to_message.from_user.id
+    elif len(message.command) > 1:
+        arg = message.command[1]
+        if arg.isdigit():
+            target_id = int(arg)
+        else:
+            try:
+                user_obj = await client.get_users(arg)
+                target_id = user_obj.id
+            except:
+                return await message.reply("❌ Invalid username or user not found.\nExample:\n`/unauthorize @username`\n`/unauthorize 123456789`")
+
+    if not target_id:
+        return await message.reply("Reply to a user or provide username/ID.\nExample:\n`/unauthorize @username`\n`/unauthorize 123456789`")
+
+    if target_id in authorized_users:
+        authorized_users.remove(target_id)
+        await message.reply(f"❌ User `{target_id}` authorization removed.")
     else:
         await message.reply("User is not authorized.")
