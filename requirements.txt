@@ -14,4 +14,4 @@ Pillow
 aiohttp
 matplotlib
 g4f
-moviepy
+moviepy==1.0.3
