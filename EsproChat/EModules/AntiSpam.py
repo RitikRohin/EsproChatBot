@@ -12,7 +12,7 @@ session_owner = {}         # Session creator lock
 
 # Powers with display emojis
 POWER_BUTTONS = [
-    ("🖊 Change Info", "can_change_info"),  # Added Change Group Info
+    ("🖊 Change Info", "can_change_info"),
     ("🧹 Delete", "can_delete_messages"),
     ("📌 Pin", "can_pin_messages"),
     ("🔗 Invite", "can_invite_users"),
@@ -21,6 +21,13 @@ POWER_BUTTONS = [
     ("🎥 Video", "can_manage_video_chats"),
     ("⚙️ Manage Chat", "can_manage_chat")
 ]
+
+# Helper to check if a user is admin or owner
+async def is_admin(client, chat_id, user_id):
+    if user_id == OWNER_ID:
+        return True
+    member = await client.get_chat_member(chat_id, user_id)
+    return member.status in ["administrator", "creator"]
 
 # Build keyboard for selecting permissions
 def build_keyboard(uid):
@@ -40,10 +47,8 @@ def build_keyboard(uid):
 # /admin command
 @app.on_message(filters.command("admin") & filters.group)
 async def handle_admin(client: Client, message: Message):
-    if message.from_user.id != OWNER_ID:
-        member = await message.chat.get_member(message.from_user.id)
-        if member.status not in ["administrator", "creator"]:
-            return await message.reply("🚫 Only group admins or the owner can use this.")
+    if not await is_admin(client, message.chat.id, message.from_user.id):
+        return await message.reply("🚫 Only group admins or the owner can use this.")
 
     args = message.text.split()[1:]
 
@@ -61,7 +66,7 @@ async def handle_admin(client: Client, message: Message):
 
     user_power_selection[target.id] = set()
     awaiting_title[f"title:{target.id}"] = tag
-    session_owner[target.id] = message.from_user.id  # Lock session
+    session_owner[target.id] = message.from_user.id
 
     await message.reply(
         f"🔘 Choose permissions for [{target.first_name}](tg://user?id={target.id}):",
@@ -75,10 +80,8 @@ async def toggle_power(client: Client, query: CallbackQuery):
     power, uid = query.data.split(":")[1:]
     uid = int(uid)
 
-    if query.from_user.id != OWNER_ID:
-        member = await client.get_chat_member(query.message.chat.id, query.from_user.id)
-        if member.status not in ["administrator", "creator"]:
-            return await query.answer("❌ Only admins or owner", show_alert=True)
+    if not await is_admin(client, query.message.chat.id, query.from_user.id):
+        return await query.answer("❌ Only admins or owner", show_alert=True)
 
     if query.from_user.id != session_owner.get(uid) and query.from_user.id != OWNER_ID:
         return await query.answer("❌ Only the session creator can modify this.", show_alert=True)
@@ -96,10 +99,8 @@ async def toggle_power(client: Client, query: CallbackQuery):
 async def apply_inline_powers(client: Client, query: CallbackQuery):
     uid = int(query.data.split(":")[1])
 
-    if query.from_user.id != OWNER_ID:
-        member = await client.get_chat_member(query.message.chat.id, query.from_user.id)
-        if member.status not in ["administrator", "creator"]:
-            return await query.answer("❌ Only admins or owner", show_alert=True)
+    if not await is_admin(client, query.message.chat.id, query.from_user.id):
+        return await query.answer("❌ Only admins or owner", show_alert=True)
 
     if query.from_user.id != session_owner.get(uid) and query.from_user.id != OWNER_ID:
         return await query.answer("❌ Only the session creator can apply permissions.", show_alert=True)
@@ -110,6 +111,68 @@ async def apply_inline_powers(client: Client, query: CallbackQuery):
 
     perms = {
         "can_manage_chat": False,
+        "can_delete_messages": False,
+        "can_restrict_members": False,
+        "can_invite_users": False,
+        "can_pin_messages": False,
+        "can_promote_members": False,
+        "can_manage_video_chats": False,
+        "can_change_info": False,
+        "is_anonymous": False
+    }
+
+    for power in powers:
+        perms[power] = True
+
+    privileges = ChatPrivileges(**perms)
+
+    try:
+        await client.promote_chat_member(query.message.chat.id, uid, privileges=privileges)
+        await client.set_administrator_title(query.message.chat.id, uid, tag)
+        await query.edit_message_text(
+            f"✅ [{tag}](tg://user?id={uid}) is now admin."
+        )
+        user_power_selection.pop(uid, None)
+    except Exception as e:
+        await query.edit_message_text(f"❌ Failed to promote:\n`{e}`")
+
+# /disadmin command
+@app.on_message(filters.command("disadmin") & filters.group)
+async def disadmin_user(client: Client, message: Message):
+    if not await is_admin(client, message.chat.id, message.from_user.id):
+        return await message.reply("❌ Only group admins or the owner can use this.")
+
+    args = message.text.split()[1:]
+
+    if message.reply_to_message:
+        target = message.reply_to_message.from_user
+    elif args:
+        try:
+            target = await client.get_users(args[0] if args[0].startswith("@") else int(args[0]))
+        except Exception as e:
+            return await message.reply(f"❌ Failed to find user:\n`{e}`")
+    else:
+        return await message.reply("🧠 Usage:\n• Reply with `/disadmin`\n• or `/disadmin @username`")
+
+    try:
+        await client.promote_chat_member(
+            chat_id=message.chat.id,
+            user_id=target.id,
+            privileges=ChatPrivileges(
+                can_manage_chat=False,
+                can_delete_messages=False,
+                can_restrict_members=False,
+                can_invite_users=False,
+                can_pin_messages=False,
+                can_promote_members=False,
+                can_manage_video_chats=False,
+                can_change_info=False,
+                is_anonymous=False
+            )
+        )
+        await message.reply(f"✅ [{target.first_name}](tg://user?id={target.id}) is no longer an admin.")
+    except Exception as e:
+        await message.reply(f"❌ Error demoting user:\n`{e}`")        "can_manage_chat": False,
         "can_delete_messages": False,
         "can_restrict_members": False,
         "can_invite_users": False,
