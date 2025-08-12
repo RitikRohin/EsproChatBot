@@ -22,7 +22,7 @@ POWER_BUTTONS = [
     ("⚙️ Manage Chat", "can_manage_chat")
 ]
 
-# Helper to check if a user is admin or owner
+# Helper to check if user is admin or owner
 async def is_admin(client, chat_id, user_id):
     if user_id == OWNER_ID:
         return True
@@ -172,102 +172,7 @@ async def disadmin_user(client: Client, message: Message):
         )
         await message.reply(f"✅ [{target.first_name}](tg://user?id={target.id}) is no longer an admin.")
     except Exception as e:
-        await message.reply(f"❌ Error demoting user:\n`{e}`")        "can_manage_chat": False,
-        "can_delete_messages": False,
-        "can_restrict_members": False,
-        "can_invite_users": False,
-        "can_pin_messages": False,
-        "can_promote_members": False,
-        "can_manage_video_chats": False,
-        "can_change_info": False,  # Added Change Group Info
-        "is_anonymous": False
-    }
-
-    for power in powers:
-        perms[power] = True
-
-    privileges = ChatPrivileges(**perms)
-
-    try:
-        await client.promote_chat_member(query.message.chat.id, uid, privileges=privileges)
-        await client.set_administrator_title(query.message.chat.id, uid, tag)
-        # Short success message
-        await query.edit_message_text(f"✅ [{tag}](tg://user?id={uid}) aap admin ban gaye ho.")
-        user_power_selection.pop(uid, None)
-    except Exception as e:
-        await query.edit_message_text(f"❌ Failed to promote:\n`{e}`")
-
-# /disadmin command
-@app.on_message(filters.command("disadmin") & filters.group)
-async def disadmin_user(client: Client, message: Message):
-    if message.from_user.id != OWNER_ID:
-        member = await message.chat.get_member(message.chat.id, message.from_user.id)
-        if member.status not in ["administrator", "creator"]:
-            return await message.reply("❌ Only group admins or the owner can use this.")
-
-    args = message.text.split()[1:]
-
-    if message.reply_to_message:
-        target = message.reply_to_message.from_user
-    elif args:
-        try:
-            target = await client.get_users(args[0] if args[0].startswith("@") else int(args[0]))
-        except Exception as e:
-            return await message.reply(f"❌ Failed to find user:\n`{e}`")
-    else:
-        return await message.reply("🧠 Usage:\n• Reply with `/disadmin`\n• or `/disadmin @username`")
-
-    try:
-        await client.promote_chat_member(
-            chat_id=message.chat.id,
-            user_id=target.id,
-            privileges=ChatPrivileges(
-                can_manage_chat=False,
-                can_delete_messages=False,
-                can_restrict_members=False,
-                can_invite_users=False,
-                can_pin_messages=False,
-                can_promote_members=False,
-                can_manage_video_chats=False,
-                can_change_info=False,  # Added here too
-                is_anonymous=False
-            )
-        )
-        await message.reply(f"✅ [{target.first_name}](tg://user?id={target.id}) is no longer an admin.")
-    except Exception as e:
-        await message.reply(f"❌ Error demoting user:\n`{e}`")    for power in powers:
-        perms[power] = True
-
-    privileges = ChatPrivileges(**perms)
-
-    try:
-        await client.promote_chat_member(query.message.chat.id, uid, privileges=privileges)
-        await client.set_administrator_title(query.message.chat.id, uid, tag)
-        await query.edit_message_text(
-            f"✅ Promoted [User](tg://user?id={uid}) with title **{tag}** and powers: `{', '.join(powers) or 'None'}`"
-        )
-        user_power_selection.pop(uid, None)
-    except Exception as e:
-        await query.edit_message_text(f"❌ Failed to promote:\n`{e}`")
-
-# /disadmin command
-@app.on_message(filters.command("disadmin") & filters.group)
-async def disadmin_user(client: Client, message: Message):
-    if message.from_user.id != OWNER_ID:
-        member = await message.chat.get_member(message.chat.id, message.from_user.id)
-        if member.status not in ["administrator", "creator"]:
-            return await message.reply("❌ Only group admins or the owner can use this.")
-
-    args = message.text.split()[1:]
-
-    if message.reply_to_message:
-        target = message.reply_to_message.from_user
-    elif args:
-        try:
-            target = await client.get_users(args[0] if args[0].startswith("@") else int(args[0]))
-        except Exception as e:
-            return await message.reply(f"❌ Failed to find user:\n`{e}`")
-    else:
+        await message.reply(f"❌ Error demoting user:\n`{e}`")    else:
         return await message.reply("🧠 Usage:\n• Reply with `/disadmin`\n• or `/disadmin @username`")
 
     try:
