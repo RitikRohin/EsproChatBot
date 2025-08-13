@@ -74,7 +74,7 @@ Espro:
     return final_answer
 
 # -------------------- Sticker/Text Handler --------------------
-@app.on_message((filters.text | filters.sticker) & ~filters.command())
+@app.on_message((filters.text | filters.sticker) & ~filters.regex(r"^/"))
 async def smart_bot_handler(client, message: Message):
     try:
         if await is_message_for_someone_else(client, message):
@@ -83,9 +83,8 @@ async def smart_bot_handler(client, message: Message):
         if message.text and contains_link(message.text):
             return
 
-        # Typing action for natural feel
-        await message.chat.send_chat_action(ChatAction.TYPING)
-        await asyncio.sleep(1)
+        await message.reply_chat_action(ChatAction.TYPING)
+        await asyncio.sleep(1)  # Natural typing delay
 
         # ---------------- Handle Replies ----------------
         if message.reply_to_message:
@@ -96,10 +95,10 @@ async def smart_bot_handler(client, message: Message):
                 key = None
                 if message.text:
                     key = message.text.lower()
-                    is_chat = list(stickerdb.find({"word": key}))
+                    is_chat = stickerdb.find({"word": key})
                 elif message.sticker:
                     key = message.sticker.file_unique_id
-                    is_chat = list(stickerdb.find({"word": key}))
+                    is_chat = stickerdb.find({"word": key})
                 else:
                     return
 
@@ -136,6 +135,56 @@ async def smart_bot_handler(client, message: Message):
 
         # ---------------- New Messages ----------------
         else:
+            # Sticker
+            if message.sticker:
+                is_chat = stickerdb.find({"word": message.sticker.file_unique_id})
+                matches = [x['text'] for x in is_chat]
+                if matches:
+                    selected = random.choice(matches)
+                    data = stickerdb.find_one({"text": selected})
+                    if data['check'] == "sticker":
+                        await message.reply_sticker(selected)
+                    else:
+                        await message.reply_text(selected)
+
+            # Text
+            elif message.text:
+                answer = await get_or_learn_answer(client, message.text.lower(), message)
+                if answer:
+                    await message.reply(answer)
+
+    except Exception:
+        logging.exception("Error in smart_bot_handler")
+        await message.reply("😓 Kuch galti ho gayi...")
+
+# -------------------- /teach Command --------------------
+@app.on_message(filters.command("teach") & filters.text)
+async def teach_command(client, message: Message):
+    if message.from_user.id != OWNER_ID:
+        return await message.reply("❌ Sirf bot owner hi /teach use kar sakta hai.")
+
+    try:
+        text = message.text.split(" ", 1)[1]
+        if "|" not in text:
+            return await message.reply("❌ Format:\n`/teach question | answer`")
+
+        question, answer = text.split("|", 1)
+        question = question.strip().lower()
+        answer = answer.strip()
+
+        chatdb.update_one(
+            {"question": question},
+            {"$set": {"answer": answer, "updated_at": datetime.utcnow()}},
+            upsert=True
+        )
+
+        await message.reply("✅ Bot ne naya jawab yaad kar liya!")
+
+    except Exception:
+        logging.exception("Error in /teach command")
+        await message.reply("😓 Kuch galti ho gayi...")
+
+logging.info("✅ Espro Chat Bot (Text + Sticker) Running...")        else:
             # Sticker
             if message.sticker:
                 is_chat = list(stickerdb.find({"word": message.sticker.file_unique_id}))
