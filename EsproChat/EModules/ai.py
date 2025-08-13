@@ -1,55 +1,67 @@
-from EsproChat import app
-from pyrogram import filters
-from pyrogram.enums import ChatAction
+from pyrogram import Client, filters, enums
 from pyrogram.types import Message
+from pyrogram.enums import ChatAction
+from pymongo import MongoClient, ASCENDING
 import g4f
-from pymongo import MongoClient
 import asyncio
 import re
-import logging
-from datetime import datetime
 import random
+import os
 
-# -------------------- Config --------------------
-BOT_USERNAME = "MissEsproBot"
+# --- Config ---
+BOT_USERNAME = "MissEsproBot"  # without @
 OWNER_ID = 7666870729
-MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro"
+MONGO_URI = os.environ.get("MONGO_URI") or "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro"
 
-# -------------------- Logging --------------------
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# --- Pyrogram App ---
+app = Client("EsproChatBot",
+             api_id=int(os.environ.get("API_ID", 12345)),
+             api_hash=os.environ.get("API_HASH", "hash"),
+             bot_token=os.environ.get("BOT_TOKEN", "token"))
 
-# -------------------- MongoDB --------------------
+# --- MongoDB setup ---
 mongo = MongoClient(MONGO_URI)
-chatdb = mongo.ChatDB.chat_data
-stickerdb = mongo.StickerDB.sticker_data  # Sticker ↔ text storage
+chatdb = mongo.ChatDB.chat_data       # For GPT Q&A
+stickerdb = mongo.StickerDB.sticker_data  # For sticker/text replies
+stickerdb.create_index([("word", ASCENDING), ("text", ASCENDING)], unique=True)
 
-# -------------------- Helper Functions --------------------
-async def is_message_for_someone_else(client, message: Message):
-    bot_id = (await client.get_me()).id
+# --- Helper Functions ---
+def is_message_for_someone_else(message: Message):
     if message.reply_to_message:
         replied_user = message.reply_to_message.from_user
-        if replied_user and replied_user.id != bot_id:
+        if replied_user and not replied_user.is_self:
             return True
     if message.entities:
         for entity in message.entities:
             if entity.type == "mention":
-                mention_text = message.text[entity.offset:entity.offset + entity.length]
+                mention_text = message.text[entity.offset:entity.offset+entity.length]
                 if mention_text.lower() != f"@{BOT_USERNAME.lower()}":
                     return True
     return False
 
-def contains_link(text: str):
-    return bool(re.search(r"(https?://|t\.me/|www\.)\S+", text.lower()))
+def contains_link(text):
+    link_pattern = r"(https?://\S+|t\.me/\S+|www\.\S+|[\w\-]+\.(com|in|net|org|xyz|me|link|ly|site|bio|store))"
+    return bool(re.search(link_pattern, text.lower()))
 
-async def get_or_learn_answer(client, user_input: str, message: Message):
+# --- GPT-based Smart Reply ---
+@app.on_message(filters.text & ~filters.regex(r"^/"))
+async def smart_bot_handler(client, message: Message):
+    if is_message_for_someone_else(message):
+        return
+    if contains_link(message.text):
+        return
+
+    await message.reply_chat_action(ChatAction.TYPING)
+    await asyncio.sleep(1)
+    user_input = message.text.strip().lower()
+
     # Check MongoDB first
     data = chatdb.find_one({"question": user_input})
     if data:
-        return data["answer"]
+        return await message.reply(data["answer"])
 
     # GPT fallback
-    prompt = f"""
-Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho.
+    prompt = f"""Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho.
 
 User: {message.text}
 Espro:
@@ -60,103 +72,69 @@ Espro:
             messages=[{"role": "user", "content": prompt}],
         )
         final_answer = response.strip()
-    except Exception as e:
-        logging.exception("GPT fallback error")
-        final_answer = None
-
-    if final_answer:
-        chatdb.update_one(
-            {"question": user_input},
-            {"$set": {"answer": final_answer, "updated_at": datetime.utcnow()}},
-            upsert=True
-        )
-
-    return final_answer
-
-# -------------------- Sticker/Text Handler --------------------
-@app.on_message((filters.text | filters.sticker) & ~filters.command())
-async def smart_bot_handler(client, message: Message):
-    try:
-        if await is_message_for_someone_else(client, message):
-            return
-
-        if message.text and contains_link(message.text):
-            return
-
-        await message.reply_chat_action(ChatAction.TYPING)
-        await asyncio.sleep(1)
-
-        # ---------------- Handle Replies ----------------
-        if message.reply_to_message:
-            replied_msg = message.reply_to_message
-
-            # If replying to bot → respond with stored sticker/text
-            if replied_msg.from_user and replied_msg.from_user.is_self:
-                key = None
-                if message.text:
-                    key = message.text.lower()
-                    is_chat = stickerdb.find({"word": key})
-                elif message.sticker:
-                    key = message.sticker.file_unique_id
-                    is_chat = stickerdb.find({"word": key})
-                else:
-                    return
-
-                matches = [x['text'] for x in is_chat]
-                if matches:
-                    selected = random.choice(matches)
-                    data = stickerdb.find_one({"text": selected})
-                    if data['check'] == "sticker":
-                        await message.reply_sticker(selected)
-                    else:
-                        await message.reply_text(selected)
-                else:
-                    if message.text:
-                        answer = await get_or_learn_answer(client, message.text.lower(), message)
-                        if answer:
-                            await message.reply(answer)
-
-            # Learn new relation if replying to another user
-            else:
-                if message.sticker and replied_msg.text:
-                    stickerdb.insert_one({
-                        "word": replied_msg.text.lower(),
-                        "text": message.sticker.file_id,
-                        "check": "sticker",
-                        "id": message.sticker.file_unique_id
-                    })
-                elif message.text and replied_msg.sticker:
-                    stickerdb.insert_one({
-                        "word": replied_msg.sticker.file_unique_id,
-                        "text": message.text,
-                        "check": "text"
-                    })
-
-        # ---------------- New Messages ----------------
+        if final_answer:
+            chatdb.update_one({"question": user_input},
+                              {"$set": {"answer": final_answer}}, upsert=True)
+            await message.reply(final_answer)
         else:
-            # Sticker
-            if message.sticker:
-                is_chat = stickerdb.find({"word": message.sticker.file_unique_id})
-                matches = [x['text'] for x in is_chat]
-                if matches:
-                    selected = random.choice(matches)
-                    data = stickerdb.find_one({"text": selected})
-                    if data['check'] == "sticker":
-                        await message.reply_sticker(selected)
-                    else:
-                        await message.reply_text(selected)
+            await message.reply("😓 Mujhe jawab nahi mila...")
+    except Exception as e:
+        await message.reply(f"😓 Error:\n{str(e)}")
 
-            # Text
-            elif message.text:
-                answer = await get_or_learn_answer(client, message.text.lower(), message)
-                if answer:
-                    await message.reply(answer)
+# --- Sticker/Text Reply Handler ---
+@app.on_message((filters.sticker | filters.text) & ~filters.bot)
+async def sticker_ai_reply(client, message: Message):
+    bot_id = (await app.get_me()).id
 
-    except Exception:
-        logging.exception("Error in smart_bot_handler")
-        await message.reply("😓 Kuch galti ho gayi...")
+    async def mongo_find(query):
+        return await asyncio.to_thread(lambda: list(stickerdb.find(query)))
 
-# -------------------- /teach Command --------------------
+    async def mongo_find_one(query):
+        return await asyncio.to_thread(lambda: stickerdb.find_one(query))
+
+    async def mongo_upsert(doc):
+        await asyncio.to_thread(lambda: stickerdb.update_one(
+            {"word": doc["word"], "text": doc["text"]}, {"$set": doc}, upsert=True))
+
+    # Replying to a message
+    if message.reply_to_message:
+        replied = message.reply_to_message
+
+        if replied.from_user and replied.from_user.id == bot_id:
+            content = message.text if message.text else message.sticker.file_unique_id
+            matches = await mongo_find({"word": content})
+            if matches:
+                choice = random.choice(matches)
+                if choice["check"] == "sticker":
+                    await message.reply_sticker(choice["text"])
+                else:
+                    await message.reply_text(choice["text"])
+        else:
+            if message.sticker and replied.text:
+                await mongo_upsert({
+                    "word": replied.text.strip(),
+                    "text": message.sticker.file_id,
+                    "check": "sticker",
+                    "id": message.sticker.file_unique_id
+                })
+            elif message.text and replied.sticker:
+                await mongo_upsert({
+                    "word": replied.sticker.file_unique_id,
+                    "text": message.text.strip(),
+                    "check": "text"
+                })
+    # Direct sticker/text without reply
+    else:
+        content = message.text if message.text else message.sticker.file_unique_id
+        matches = await mongo_find({"word": content})
+        if matches:
+            choice = random.choice(matches)
+            if choice["check"] == "sticker":
+                await message.reply_sticker(choice["text"])
+            else:
+                await message.reply_text(choice["text"])
+
+# --- /teach Command ---
 @app.on_message(filters.command("teach") & filters.text)
 async def teach_command(client, message: Message):
     if message.from_user.id != OWNER_ID:
@@ -166,21 +144,11 @@ async def teach_command(client, message: Message):
         text = message.text.split(" ", 1)[1]
         if "|" not in text:
             return await message.reply("❌ Format:\n`/teach question | answer`")
-
         question, answer = text.split("|", 1)
         question = question.strip().lower()
         answer = answer.strip()
-
-        chatdb.update_one(
-            {"question": question},
-            {"$set": {"answer": answer, "updated_at": datetime.utcnow()}},
-            upsert=True
-        )
-
+        chatdb.update_one({"question": question}, {"$set": {"answer": answer}}, upsert=True)
         await message.reply("✅ Bot ne naya jawab yaad kar liya!")
+    except Exception as e:
+        await message.reply(f"😓 Error:\n{str(e)}")
 
-    except Exception:
-        logging.exception("Error in /teach command")
-        await message.reply("😓 Kuch galti ho gayi...")
-
-logging.info("✅ Espro Chat Bot (Text + Sticker) Running...")
