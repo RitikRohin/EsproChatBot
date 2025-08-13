@@ -74,7 +74,7 @@ Espro:
     return final_answer
 
 # -------------------- Sticker/Text Handler --------------------
-@app.on_message((filters.text | filters.sticker) & ~filters.command)
+@app.on_message((filters.text | filters.sticker) & ~filters.command())
 async def smart_bot_handler(client, message: Message):
     try:
         if await is_message_for_someone_else(client, message):
