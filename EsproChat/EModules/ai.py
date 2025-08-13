@@ -83,9 +83,10 @@ async def smart_bot_handler(client, message: Message):
         if message.text and contains_link(message.text):
             return
 
-await message.reply_chat_action(ChatAction.TYPING)  # Typing dikhaye
-await asyncio.sleep(1)  # Delay, natural lage
-await message.reply_sticker(sticker_file_id)  # Sticker send kare
+        # Typing action for natural feel
+        await message.chat.send_chat_action(ChatAction.TYPING)
+        await asyncio.sleep(1)
+
         # ---------------- Handle Replies ----------------
         if message.reply_to_message:
             replied_msg = message.reply_to_message
@@ -95,10 +96,10 @@ await message.reply_sticker(sticker_file_id)  # Sticker send kare
                 key = None
                 if message.text:
                     key = message.text.lower()
-                    is_chat = stickerdb.find({"word": key})
+                    is_chat = list(stickerdb.find({"word": key}))
                 elif message.sticker:
                     key = message.sticker.file_unique_id
-                    is_chat = stickerdb.find({"word": key})
+                    is_chat = list(stickerdb.find({"word": key}))
                 else:
                     return
 
@@ -137,7 +138,7 @@ await message.reply_sticker(sticker_file_id)  # Sticker send kare
         else:
             # Sticker
             if message.sticker:
-                is_chat = stickerdb.find({"word": message.sticker.file_unique_id})
+                is_chat = list(stickerdb.find({"word": message.sticker.file_unique_id}))
                 matches = [x['text'] for x in is_chat]
                 if matches:
                     selected = random.choice(matches)
@@ -169,7 +170,7 @@ async def teach_command(client, message: Message):
             return await message.reply("❌ Format:\n`/teach question | answer`")
 
         question, answer = text.split("|", 1)
-        question = question.strip().lower()
+        question = " ".join(question.split()).lower()
         answer = answer.strip()
 
         chatdb.update_one(
