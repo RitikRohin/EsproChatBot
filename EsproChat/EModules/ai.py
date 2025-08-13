@@ -184,7 +184,7 @@ async def teach_command(client, message: Message):
         logging.exception("Error in /teach command")
         await message.reply("😓 Kuch galti ho gayi...")
 
-logging.info("✅ Espro Chat Bot (Text + Sticker) Running...")        else:
+logging.info("✅ Espro Chat Bot (Text + Sticker) Running...")
             # Sticker
             if message.sticker:
                 is_chat = list(stickerdb.find({"word": message.sticker.file_unique_id}))
