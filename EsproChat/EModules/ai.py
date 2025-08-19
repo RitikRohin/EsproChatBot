@@ -1,4 +1,4 @@
-from EsproChat import app  # Your Pyrogram app must be imported from here
+from EsproChat import app
 from pyrogram import filters
 from pyrogram.enums import ChatAction
 from pyrogram.types import Message
@@ -6,9 +6,8 @@ from pymongo import MongoClient
 import asyncio
 import re
 import g4f
-from datetime import datetime
 
-# 🔧 Config
+# 🔧 Configuration
 BOT_USERNAME = "MissEsproBot"  # without @
 OWNER_ID = 7666870729
 MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro"
@@ -18,7 +17,7 @@ mongo = MongoClient(MONGO_URI)
 chatdb = mongo.ChatDB.chat_data
 stickerdb = mongo.ChatDB.sticker_data
 
-# ❌ Ignore if replying to or mentioning someone else
+# ❌ Ignore if message is meant for someone else
 def is_message_for_someone_else(message: Message):
     if message.reply_to_message:
         replied_user = message.reply_to_message.from_user
@@ -27,17 +26,17 @@ def is_message_for_someone_else(message: Message):
     if message.entities:
         for entity in message.entities:
             if entity.type == "mention":
-                mention_text = message.text[entity.offset:entity.offset + entity.length]
+                mention_text = message.text[entity.offset : entity.offset + entity.length]
                 if mention_text.lower() != f"@{BOT_USERNAME.lower()}":
                     return True
     return False
 
-# ❌ Ignore if message contains a link
+# ❌ Ignore if message contains link
 def contains_link(text):
     link_pattern = r"(https?://\S+|t\.me/\S+|www\.\S+|[\w\-]+\.(com|in|net|org|xyz|me|link|ly|site|bio|store))"
     return bool(re.search(link_pattern, text.lower()))
 
-# ✅ Text Handler
+# ✅ Text handler with GPT fallback and learning
 @app.on_message(filters.text & ~filters.regex(r"^/"))
 async def smart_bot_handler(client, message: Message):
     if is_message_for_someone_else(message) or contains_link(message.text):
@@ -49,19 +48,18 @@ async def smart_bot_handler(client, message: Message):
     try:
         user_input = message.text.strip().lower()
 
-        # 🔍 Check MongoDB
+        # Check MongoDB first
         data = chatdb.find_one({"question": user_input})
         if data:
             return await message.reply(data["answer"])
 
-        # 🧠 GPT fallback
+        # Use GPT if not found
         prompt = f"""
 Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho.
 
 User: {message.text}
 Espro:
 """
-
         response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[{"role": "user", "content": prompt}],
@@ -82,7 +80,7 @@ Espro:
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
 
-# ✅ /teach command
+# ✅ /teach command for text Q/A
 @app.on_message(filters.command("teach") & filters.text)
 async def teach_command(client, message: Message):
     if message.from_user.id != OWNER_ID:
@@ -108,7 +106,7 @@ async def teach_command(client, message: Message):
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
 
-# ✅ Sticker Handler
+# ✅ Handle sticker message and reply if known
 @app.on_message(filters.sticker)
 async def handle_sticker(client, message: Message):
     sticker_id = message.sticker.file_unique_id
@@ -121,32 +119,33 @@ async def handle_sticker(client, message: Message):
         else:
             return await message.reply(data["answer"])
 
-    
-# ✅ Learn: Sticker → Text or Sticker
+    await message.reply("🤔 Is sticker ka jawab mujhe nahi pata.")
+
+# ✅ Learn from reply: Sticker → Text or Sticker
 @app.on_message(filters.reply & (filters.text | filters.sticker))
 async def learn_from_reply(client, message: Message):
     replied = message.reply_to_message
 
-    # Case: replied message is a sticker
     if replied and replied.sticker:
-        sticker_id = replied.sticker.file_unique_id
+        question_sticker_id = replied.sticker.file_unique_id
 
+        # Answer is either text or another sticker
         if message.text:
             answer = message.text.strip()
         elif message.sticker:
             answer = f"[Sticker: {message.sticker.file_id}]"
         else:
-            return
+            return  # Ignore other types
 
         stickerdb.update_one(
-            {"sticker_id": sticker_id},
+            {"sticker_id": question_sticker_id},
             {"$set": {"answer": answer}},
             upsert=True
         )
 
-        await message.reply("✅ Sticker ka jawab yaad ho gaya!")
+        await message.reply("✅ Sticker ka reply yaad ho gaya!")
 
-# ✅ /teach_sticker command (manual)
+# ✅ Manual sticker teaching command
 @app.on_message(filters.command("teach_sticker") & filters.reply)
 async def manual_teach_sticker(client, message: Message):
     if message.from_user.id != OWNER_ID:
@@ -170,7 +169,7 @@ async def manual_teach_sticker(client, message: Message):
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
 
-# ✅ /list_stickers command (debug - optional)
+# ✅ Optional: List learned stickers (for debug)
 @app.on_message(filters.command("list_stickers") & filters.user(OWNER_ID))
 async def list_stickers(client, message: Message):
     data = stickerdb.find()
@@ -181,4 +180,4 @@ async def list_stickers(client, message: Message):
     for doc in data:
         text += f"🆔 {doc['sticker_id']} ➜ {doc['answer']}\n"
 
-    await message.reply(text[:4096])  # Telegram message limit
+    await message.reply(text[:4096])
