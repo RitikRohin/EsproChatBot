@@ -45,10 +45,11 @@ async def smart_bot_handler(client, message: Message):
         return
     if contains_link(message.text):
         return
-    if message.text.strip().startswith("#"):  # ❌ Ignore messages starting with #
+    if message.text.strip().startswith("#"):
         return
+    if message.reply_to_message and message.reply_to_message.sticker:
+        return  # Avoid handling sticker text replies here
 
-    # 🤖 Bot reply to user text
     await message.reply_chat_action(ChatAction.TYPING)
     await asyncio.sleep(1)
 
@@ -113,7 +114,7 @@ async def teach_command(client, message: Message):
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
 
-# ✅ Sticker Handler
+# ✅ Sticker ➜ Sticker Learn/Reply
 @app.on_message(filters.sticker)
 async def sticker_handler(client, message: Message):
     try:
@@ -123,20 +124,18 @@ async def sticker_handler(client, message: Message):
         reply_to = message.reply_to_message
         bot_id = (await client.get_me()).id
 
-        # ✅ Learning: User replies to human sticker (NOT bot), and replied message must be a sticker
-        if reply_to.from_user.id != bot_id:
-            # 🧠 Allow only if replied to a sticker
-            if reply_to.sticker:
-                key = reply_to.sticker.file_unique_id
-                chatai.insert_one({
-                    "word": key,
-                    "text": message.sticker.file_id,
-                    "check": "sticker"
-                })
+        # ✅ Learn: User replies to human sticker with sticker
+        if reply_to.sticker and reply_to.from_user.id != bot_id:
+            key = reply_to.sticker.file_unique_id
+            chatai.insert_one({
+                "word": key,
+                "text": message.sticker.file_id,
+                "check": "sticker"
+            })
             return
 
-        # 🤖 Reply mode: Bot’s own sticker received a sticker reply
-        if reply_to.sticker:
+        # 🤖 Reply: Bot’s sticker got a sticker reply
+        if reply_to.sticker and reply_to.from_user.id == bot_id:
             key = reply_to.sticker.file_unique_id
             results = list(chatai.find({"word": key, "check": "sticker"}))
             if results:
@@ -146,8 +145,8 @@ async def sticker_handler(client, message: Message):
     except Exception as e:
         await message.reply(f"😓 Sticker error:\n{str(e)}")
 
-# ✅ Text Reply to Sticker Handler
-@app.on_message(filters.text & ~filters.command(["each"]))
+# ✅ Sticker ➜ Text Learn/Reply
+@app.on_message(filters.text & ~filters.command(["teach"]))
 async def sticker_text_handler(client, message: Message):
     try:
         if not message.reply_to_message:
@@ -156,7 +155,7 @@ async def sticker_text_handler(client, message: Message):
         reply_to = message.reply_to_message
         bot_id = (await client.get_me()).id
 
-        # ✅ Learning: Replying to a human sticker with text
+        # ✅ Learn: user replies with text to a sticker
         if reply_to.sticker and reply_to.from_user.id != bot_id:
             key = reply_to.sticker.file_unique_id
             chatai.insert_one({
@@ -166,7 +165,7 @@ async def sticker_text_handler(client, message: Message):
             })
             return
 
-        # 🤖 Reply Mode: Replying to bot’s sticker with text message
+        # 🤖 Reply: bot’s sticker got a text reply
         if reply_to.sticker and reply_to.from_user.id == bot_id:
             key = reply_to.sticker.file_unique_id
             results = list(chatai.find({"word": key, "check": "text"}))
