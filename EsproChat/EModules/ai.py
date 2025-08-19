@@ -1,5 +1,5 @@
 from EsproChat import app
-from pyrogram import Client, filters, enums
+from pyrogram import filters, enums
 from pyrogram.types import Message
 from pyrogram.enums import ChatAction
 import g4f
@@ -15,8 +15,8 @@ MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retr
 
 # ✅ MongoDB setup
 mongo = MongoClient(MONGO_URI)
-chatdb = mongo.ChatDB.chat_data      # For text chat responses
-chatai = mongo.Word.WordDb           # For sticker replies
+chatdb = mongo.ChatDB.chat_data
+chatai = mongo.Word.WordDb  # Sticker DB
 
 # ❌ Ignore if replying to or mentioning someone else
 def is_message_for_someone_else(message: Message):
@@ -41,34 +41,34 @@ def contains_link(text):
 # ✅ Smart Chat Handler
 @app.on_message(filters.text & ~filters.regex(r"^/"))
 async def smart_bot_handler(client, message: Message):
-    if is_message_for_someone_else(message) or contains_link(message.text):
+    if is_message_for_someone_else(message):
+        return
+    if contains_link(message.text):
         return
 
     await message.reply_chat_action(ChatAction.TYPING)
-    await asyncio.sleep(random.uniform(0.5, 1.5))
+    await asyncio.sleep(1)
 
     try:
         user_input = message.text.strip().lower()
 
-        # 🔍 Check MongoDB first
+        # 🔍 Check MongoDB
         data = chatdb.find_one({"question": user_input})
         if data:
             return await message.reply(data["answer"])
 
         # 🧠 GPT fallback
         prompt = f"""
-Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho.
+Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 words me likho.
 
 User: {message.text}
 Espro:
 """
-
         response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[{"role": "user", "content": prompt}],
         )
-
-        final_answer = str(response).strip()  # ensure it's a string
+        final_answer = response.strip()
 
         # ✅ Learn and save
         if final_answer:
@@ -111,49 +111,45 @@ async def teach_command(client, message: Message):
         await message.reply("😓 Error:\n" + str(e))
 
 # ✅ Sticker Reply & Learning
-@app.on_message(filters.sticker & ~filters.private)
+@app.on_message(filters.sticker)
 async def sticker_reply(client, message: Message):
     try:
         getme = await client.get_me()
         bot_id = getme.id
 
-        # Agar bot ko reply kiya jaa raha hai
+        # Agar sticker reply kisi bot message pe hai
         if message.reply_to_message and message.reply_to_message.from_user.id == bot_id:
             await message.chat.send_action(ChatAction.TYPING)
-            await asyncio.sleep(random.uniform(0.5, 1.5))
+            await asyncio.sleep(1)
 
-            query_word = None
+            # Query word = reply message ka sticker ya text
             if message.reply_to_message.sticker:
                 query_word = message.reply_to_message.sticker.file_unique_id
+            elif message.reply_to_message.text:
+                query_word = message.reply_to_message.text.strip().lower()
+            else:
+                return
 
-            if query_word:
-                results = list(chatai.find({"word": query_word}))
-                if results:
-                    chosen = random.choice(results)
-                    if chosen['check'] == "sticker":
-                        await message.reply_sticker(chosen['text'])
-                    else:
-                        await message.reply_text(chosen['text'])
+            results = list(chatai.find({"word": query_word}))
+            if results:
+                chosen = random.choice(results)
+                if chosen['check'] == "sticker":
+                    await message.reply_sticker(chosen['text'])
+                else:
+                    await message.reply_text(chosen['text'])
 
-        # Agar user kisi human message ko reply kar raha hai → learn
+        # Agar user kisi human message ko sticker reply kar raha hai → learn
         elif message.reply_to_message:
-            if message.sticker:
-                query_word = None
-                if message.reply_to_message.sticker:
-                    query_word = message.reply_to_message.sticker.file_unique_id
-                elif message.reply_to_message.text:
-                    query_word = message.reply_to_message.text.strip().lower()
+            record = chatai.find_one({
+                "word": message.reply_to_message.sticker.file_unique_id if message.reply_to_message.sticker else message.reply_to_message.text.strip().lower(),
+                "text": message.sticker.file_id
+            })
+            if not record:
+                chatai.insert_one({
+                    "word": message.reply_to_message.sticker.file_unique_id if message.reply_to_message.sticker else message.reply_to_message.text.strip().lower(),
+                    "text": message.sticker.file_id,
+                    "check": "sticker"
+                })
 
-                if query_word:
-                    record = chatai.find_one({
-                        "word": query_word,
-                        "text": message.sticker.file_id
-                    })
-                    if not record:
-                        chatai.insert_one({
-                            "word": query_word,
-                            "text": message.sticker.file_id,
-                            "check": "sticker"
-                        })
     except Exception as e:
-        print(f"Sticker handler error: {e}")
+        await message.reply(f"😓 Sticker error:\n{str(e)}")
