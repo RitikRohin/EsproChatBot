@@ -9,12 +9,7 @@ import re
 
 from config import BOT_USERNAME, OWNER_ID, MONGO_URL
 
-mongo = MongoClient(MONGO_URI)
-chatdb = mongo.ChatDB.chat_data
-
-# ... baaki code same as previous full file ...
-# ✅ MongoDB setup
-mongo = MongoClient(MONGO_URI)
+mongo = MongoClient(MONGO_URL)
 chatdb = mongo.ChatDB.chat_data
 
 # ❌ Ignore if replying to or mentioning someone else
