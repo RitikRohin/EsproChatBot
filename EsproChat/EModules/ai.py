@@ -1,4 +1,4 @@
-from EsproChat import app  # Make sure this exists
+from EsproChat import app  # Your Pyrogram app must be imported from here
 from pyrogram import filters
 from pyrogram.enums import ChatAction
 from pyrogram.types import Message
@@ -69,7 +69,6 @@ Espro:
 
         final_answer = response.strip()
 
-        # ✅ Learn and save
         if final_answer:
             chatdb.update_one(
                 {"question": user_input},
@@ -114,7 +113,6 @@ async def teach_command(client, message: Message):
 async def handle_sticker(client, message: Message):
     sticker_id = message.sticker.file_unique_id
 
-    # 🔍 Check DB
     data = stickerdb.find_one({"sticker_id": sticker_id})
     if data:
         if data["answer"].startswith("[Sticker: "):
@@ -123,25 +121,15 @@ async def handle_sticker(client, message: Message):
         else:
             return await message.reply(data["answer"])
 
-    # 👀 Wait for reply from user
-    if message.reply_to_message and message.reply_to_message.text:
-        reply_text = message.reply_to_message.text.strip()
-
-        stickerdb.update_one(
-            {"sticker_id": sticker_id},
-            {"$set": {"answer": reply_text}},
-            upsert=True
-        )
-        return await message.reply("✅ Maine is sticker ka jawab yaad kar liya!")
-
     await message.reply("🤔 Is sticker ka jawab mujhe nahi pata.")
 
-# ✅ Sticker Reply Learning
+# ✅ Learn: Sticker → Text or Sticker
 @app.on_message(filters.reply & (filters.text | filters.sticker))
-async def handle_reply_to_sticker(client, message: Message):
+async def learn_from_reply(client, message: Message):
     replied = message.reply_to_message
 
-    if replied.sticker:
+    # Case: replied message is a sticker
+    if replied and replied.sticker:
         sticker_id = replied.sticker.file_unique_id
 
         if message.text:
@@ -159,7 +147,7 @@ async def handle_reply_to_sticker(client, message: Message):
 
         await message.reply("✅ Sticker ka jawab yaad ho gaya!")
 
-# ✅ Manual teach sticker command
+# ✅ /teach_sticker command (manual)
 @app.on_message(filters.command("teach_sticker") & filters.reply)
 async def manual_teach_sticker(client, message: Message):
     if message.from_user.id != OWNER_ID:
@@ -182,3 +170,16 @@ async def manual_teach_sticker(client, message: Message):
 
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
+
+# ✅ /list_stickers command (debug - optional)
+@app.on_message(filters.command("list_stickers") & filters.user(OWNER_ID))
+async def list_stickers(client, message: Message):
+    data = stickerdb.find()
+    if not data:
+        return await message.reply("😕 Koi sticker mapping nahi mili.")
+    
+    text = "📦 Learned Sticker Mappings:\n\n"
+    for doc in data:
+        text += f"🆔 {doc['sticker_id']} ➜ {doc['answer']}\n"
+
+    await message.reply(text[:4096])  # Telegram message limit
