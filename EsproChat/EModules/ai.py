@@ -7,9 +7,11 @@ from pymongo import MongoClient
 import asyncio
 import re
 
-from config import BOT_USERNAME, OWNER_ID, MONGO_URL
+from config import BOT_USERNAME, OWNER_ID
+MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro"
 
-mongo = MongoClient(MONGO_URL)
+
+mongo = MongoClient(MONGO_URI)
 chatdb = mongo.ChatDB.chat_data
 
 # ❌ Ignore if replying to or mentioning someone else
