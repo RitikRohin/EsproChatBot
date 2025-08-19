@@ -38,12 +38,14 @@ def contains_link(text):
     link_pattern = r"(https?://\S+|t\.me/\S+|www\.\S+|[\w\-]+\.(com|in|net|org|xyz|me|link|ly|site|bio|store))"
     return bool(re.search(link_pattern, text.lower()))
 
-# ✅ Smart Chat Handler
+# ✅ Smart Chat Handler - text only, ignore #messages
 @app.on_message(filters.text & ~filters.regex(r"^/"))
 async def smart_bot_handler(client, message: Message):
     if is_message_for_someone_else(message):
         return
     if contains_link(message.text):
+        return
+    if message.text.strip().startswith("#"):  # ❌ Ignore messages starting with #
         return
 
     await message.reply_chat_action(ChatAction.TYPING)
@@ -52,14 +54,14 @@ async def smart_bot_handler(client, message: Message):
     try:
         user_input = message.text.strip().lower()
 
-        # 🔍 Check MongoDB
+        # 🔍 Check MongoDB first
         data = chatdb.find_one({"question": user_input})
         if data:
             return await message.reply(data["answer"])
 
         # 🧠 GPT fallback
         prompt = f"""
-Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 words me likho.
+Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho.
 
 User: {message.text}
 Espro:
@@ -110,46 +112,36 @@ async def teach_command(client, message: Message):
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
 
-# ✅ Sticker Reply & Learning
+# ✅ Sticker Reply & Learning - safe
 @app.on_message(filters.sticker)
-async def sticker_reply(client, message: Message):
+async def sticker_handler(client, message: Message):
     try:
-        getme = await client.get_me()
-        bot_id = getme.id
+        if not message.reply_to_message:
+            return
 
-        # Agar sticker reply kisi bot message pe hai
-        if message.reply_to_message and message.reply_to_message.from_user.id == bot_id:
-            await message.chat.send_action(ChatAction.TYPING)
-            await asyncio.sleep(1)
+        reply_to = message.reply_to_message
+        bot_id = (await client.get_me()).id
 
-            # Query word = reply message ka sticker ya text
-            if message.reply_to_message.sticker:
-                query_word = message.reply_to_message.sticker.file_unique_id
-            elif message.reply_to_message.text:
-                query_word = message.reply_to_message.text.strip().lower()
-            else:
-                return
-
-            results = list(chatai.find({"word": query_word}))
-            if results:
-                chosen = random.choice(results)
-                if chosen['check'] == "sticker":
-                    await message.reply_sticker(chosen['text'])
-                else:
-                    await message.reply_text(chosen['text'])
-
-        # Agar user kisi human message ko sticker reply kar raha hai → learn
-        elif message.reply_to_message:
-            record = chatai.find_one({
-                "word": message.reply_to_message.sticker.file_unique_id if message.reply_to_message.sticker else message.reply_to_message.text.strip().lower(),
-                "text": message.sticker.file_id
-            })
+        # Learning mode: user replies to human message (text or sticker)
+        if reply_to.from_user.id != bot_id:
+            key = reply_to.sticker.file_unique_id if reply_to.sticker else reply_to.text.lower()
+            record = chatai.find_one({"word": key, "text": message.sticker.file_id})
             if not record:
                 chatai.insert_one({
-                    "word": message.reply_to_message.sticker.file_unique_id if message.reply_to_message.sticker else message.reply_to_message.text.strip().lower(),
+                    "word": key,
                     "text": message.sticker.file_id,
                     "check": "sticker"
                 })
+            return
+
+        # Reply mode: bot ke sticker message ka reply
+        # ⚠️ Text messages ke reply pe sticker nahi bhejega
+        if reply_to.sticker:
+            key = reply_to.sticker.file_unique_id
+            results = list(chatai.find({"word": key, "check": "sticker"}))
+            if results:
+                chosen = random.choice(results)
+                await message.reply_sticker(chosen['text'])
 
     except Exception as e:
         await message.reply(f"😓 Sticker error:\n{str(e)}")
