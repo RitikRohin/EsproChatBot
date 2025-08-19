@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 import random
 
-from EsproChat import app  # Assuming 'app' is your Client instance
+from EsproChat import app  # Your Pyrogram client
 from config import MONGO_URL
 
 # ---------------- MongoDB setup ----------------
@@ -12,7 +12,7 @@ mongo_client = MongoClient(MONGO_URL)
 db = mongo_client["Word"]
 chatai = db["WordDb"]
 
-# Ensure unique index to prevent duplicates
+# Unique index (to prevent duplicate sticker pairs)
 try:
     chatai.create_index(
         [("word", 1), ("text", 1), ("check", 1)],
@@ -26,22 +26,25 @@ except Exception as e:
 @app.on_message(filters.sticker & ~filters.bot)
 async def sticker_reply(client: Client, message: Message):
     """
-    Sticker Auto-reply & Learning
+    Sticker Auto-reply & Learning (with debug logs)
     """
 
-    # Case 1: Auto-reply if message is not a reply
+    # Case 1: Auto-reply if not replying to a message
     if not message.reply_to_message:
         key = message.sticker.file_unique_id
         matches = list(chatai.find({"word": key, "check": "sticker"}).limit(10))
 
         if matches:
             chosen = random.choice(matches)
+            file_id = chosen["text"]  # Should be sticker file_id
+
             try:
-                await message.reply_sticker(chosen["text"])  # text = file_id of reply sticker
+                await message.reply_sticker(file_id)
+                print(f"✅ Sent sticker reply: {file_id}")
             except Exception as e:
-                print(f"Failed to send sticker: {e}")
+                print(f"❌ Failed to send sticker reply: {file_id} | Error: {e}")
         else:
-            print(f"No sticker reply found for {key}")
+            print(f"⚠️ No sticker reply found for key: {key}")
         return
 
     # Case 2: Learn sticker-to-sticker replies
@@ -65,6 +68,6 @@ async def sticker_reply(client: Client, message: Message):
             })
             print(f"✅ Learned sticker pair: {word} -> {response}")
         except DuplicateKeyError:
-            print("⚠️ Sticker pair already exists")
+            print(f"⚠️ Duplicate pair skipped: {word} -> {response}")
         except Exception as e:
-            print(f"Insert error: {e}")
+            print(f"❌ Insert error: {e}")
