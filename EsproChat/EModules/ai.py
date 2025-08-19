@@ -8,6 +8,7 @@ import asyncio
 import re
 
 from config import BOT_USERNAME, OWNER_ID
+
 MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro"
 
 
