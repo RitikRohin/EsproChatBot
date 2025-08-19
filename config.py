@@ -5,7 +5,7 @@ API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-BOT_USERNAME = getenv("BOT_USERNAME", "8010493541")
+BOT_USERNAME = getenv("BOT_USERNAME", "MissEsproBot")
 
 OWNER_ID = list(map(int, getenv("OWNER_ID", "7666870729").split()))
 AUTH_USERS = list(map(int, getenv("AUTH_USERS", "7666870729").split())) if getenv("AUTH_USERS") else []
