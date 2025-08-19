@@ -7,7 +7,7 @@ from pymongo import MongoClient
 import asyncio
 import re
 
-from config import BOT_USERNAME, OWNER_ID, MONGO_URI
+from config import BOT_USERNAME, OWNER_ID, MONGO_URL
 
 mongo = MongoClient(MONGO_URI)
 chatdb = mongo.ChatDB.chat_data
