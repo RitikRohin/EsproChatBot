@@ -121,8 +121,7 @@ async def handle_sticker(client, message: Message):
         else:
             return await message.reply(data["answer"])
 
-    await message.reply("🤔 Is sticker ka jawab mujhe nahi pata.")
-
+    
 # ✅ Learn: Sticker → Text or Sticker
 @app.on_message(filters.reply & (filters.text | filters.sticker))
 async def learn_from_reply(client, message: Message):
