@@ -1,11 +1,12 @@
 from EsproChat import app
-from pyrogram import filters
-from pyrogram.enums import ChatAction
+from pyrogram import Client, filters, enums
 from pyrogram.types import Message
+from pyrogram.enums import ChatAction
 import g4f
 from pymongo import MongoClient
 import asyncio
 import re
+import random
 
 # 🔧 Config
 BOT_USERNAME = "MissEsproBot"  # without @
@@ -14,7 +15,8 @@ MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retr
 
 # ✅ MongoDB setup
 mongo = MongoClient(MONGO_URI)
-chatdb = mongo.ChatDB.chat_data
+chatdb = mongo.ChatDB.chat_data      # For text chat responses
+chatai = mongo.Word.WordDb           # For sticker replies
 
 # ❌ Ignore if replying to or mentioning someone else
 def is_message_for_someone_else(message: Message):
@@ -39,19 +41,16 @@ def contains_link(text):
 # ✅ Smart Chat Handler
 @app.on_message(filters.text & ~filters.regex(r"^/"))
 async def smart_bot_handler(client, message: Message):
-    if is_message_for_someone_else(message):
-        return  # ❌ Ignore replies or mentions
-
-    if contains_link(message.text):
-        return  # ❌ Ignore messages with links
+    if is_message_for_someone_else(message) or contains_link(message.text):
+        return
 
     await message.reply_chat_action(ChatAction.TYPING)
-    await asyncio.sleep(1)
+    await asyncio.sleep(random.uniform(0.5, 1.5))
 
     try:
         user_input = message.text.strip().lower()
 
-        # 🔍 Check MongoDB
+        # 🔍 Check MongoDB first
         data = chatdb.find_one({"question": user_input})
         if data:
             return await message.reply(data["answer"])
@@ -69,7 +68,7 @@ Espro:
             messages=[{"role": "user", "content": prompt}],
         )
 
-        final_answer = response.strip()
+        final_answer = str(response).strip()  # ensure it's a string
 
         # ✅ Learn and save
         if final_answer:
@@ -110,3 +109,51 @@ async def teach_command(client, message: Message):
 
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
+
+# ✅ Sticker Reply & Learning
+@app.on_message(filters.sticker & ~filters.private)
+async def sticker_reply(client, message: Message):
+    try:
+        getme = await client.get_me()
+        bot_id = getme.id
+
+        # Agar bot ko reply kiya jaa raha hai
+        if message.reply_to_message and message.reply_to_message.from_user.id == bot_id:
+            await message.chat.send_action(ChatAction.TYPING)
+            await asyncio.sleep(random.uniform(0.5, 1.5))
+
+            query_word = None
+            if message.reply_to_message.sticker:
+                query_word = message.reply_to_message.sticker.file_unique_id
+
+            if query_word:
+                results = list(chatai.find({"word": query_word}))
+                if results:
+                    chosen = random.choice(results)
+                    if chosen['check'] == "sticker":
+                        await message.reply_sticker(chosen['text'])
+                    else:
+                        await message.reply_text(chosen['text'])
+
+        # Agar user kisi human message ko reply kar raha hai → learn
+        elif message.reply_to_message:
+            if message.sticker:
+                query_word = None
+                if message.reply_to_message.sticker:
+                    query_word = message.reply_to_message.sticker.file_unique_id
+                elif message.reply_to_message.text:
+                    query_word = message.reply_to_message.text.strip().lower()
+
+                if query_word:
+                    record = chatai.find_one({
+                        "word": query_word,
+                        "text": message.sticker.file_id
+                    })
+                    if not record:
+                        chatai.insert_one({
+                            "word": query_word,
+                            "text": message.sticker.file_id,
+                            "check": "sticker"
+                        })
+    except Exception as e:
+        print(f"Sticker handler error: {e}")
