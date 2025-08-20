@@ -22,7 +22,7 @@ mongo = MongoClient(MONGO_URL)
 db = mongo["Word"]
 chatai = db["WordDb"]
 
-# ensure unique index (word + text + check combination)
+# ensure unique index
 chatai.create_index([("word", 1), ("text", 1), ("check", 1)], unique=True)
 
 
@@ -30,7 +30,7 @@ chatai.create_index([("word", 1), ("text", 1), ("check", 1)], unique=True)
 @app.on_message(filters.sticker & ~filters.bot)
 async def sticker_reply(client: Client, message: Message):
 
-    # Case 1: Auto reply
+    # Case 1: Auto reply from DB
     if not message.reply_to_message:
         key = message.sticker.file_unique_id
         match = list(chatai.aggregate([
@@ -41,18 +41,31 @@ async def sticker_reply(client: Client, message: Message):
         if match:
             file_id = match[0]["text"]
 
-            # Step 1: Show "choosing sticker..."
             await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
-
-            # Step 2: Random delay (1–3 sec) for natural effect
             await asyncio.sleep(random.uniform(1.0, 3.0))
-
-            # Step 3: Reply with sticker
             await message.reply_sticker(file_id)
 
             log.info(f"✅ Sent sticker reply for {key}")
+            return
+
+        # ---------------- If no DB match → Reply from Sticker Pack ----------------
+        if message.sticker.set_name:
+            try:
+                sticker_set = await client.get_sticker_set(message.sticker.set_name)
+                if sticker_set.stickers:
+                    random_sticker = random.choice(sticker_set.stickers)
+
+                    await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
+                    await asyncio.sleep(random.uniform(1.0, 2.0))
+                    await message.reply_sticker(random_sticker.file_id)
+
+                    log.info(f"✅ Auto-replied from sticker pack {message.sticker.set_name}")
+                else:
+                    log.info("⚠️ Sticker set has no stickers")
+            except Exception as e:
+                log.error(f"❌ Failed to fetch sticker set: {e}")
         else:
-            log.info(f"⚠️ No sticker reply found for {key}")
+            log.info("⚠️ Sticker has no set_name (custom/one-time sticker)")
         return
 
     # Case 2: Learning new sticker pair
