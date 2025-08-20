@@ -43,7 +43,7 @@ async def sticker_reply(client: Client, message: Message):
 
     key = message.sticker.file_unique_id
 
-    # Case 1: Auto reply from DB
+    # ---------------- Case 1: Auto reply from DB ----------------
     match = list(chatai.aggregate([
         {"$match": {"word": key, "check": "sticker"}},
         {"$sample": {"size": 1}}
@@ -77,10 +77,11 @@ async def sticker_reply(client: Client, message: Message):
         else:
             log.info("⚠️ Sticker has no set_name (custom/one-time sticker)")
 
-    # Case 2: Learning new sticker pair (only if replying to bot)
+    # ---------------- Case 2: Learning new sticker pair ----------------
     if message.reply_to_message and message.reply_to_message.sticker:
         me = await client.get_me()
 
+        # ✅ Only learn if the replied message is from the bot
         if message.reply_to_message.from_user and message.reply_to_message.from_user.id == me.id:
             try:
                 chatai.insert_one({
@@ -94,4 +95,4 @@ async def sticker_reply(client: Client, message: Message):
             except DuplicateKeyError:
                 log.info("⚠️ Duplicate pair skipped")
         else:
-            log.info("⏩ Ignored sticker reply (not replying to bot)")
+            log.info("⏩ Ignored sticker reply (because it was replying to another user)")
