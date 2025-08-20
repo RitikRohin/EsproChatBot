@@ -77,16 +77,21 @@ async def sticker_reply(client: Client, message: Message):
         else:
             log.info("⚠️ Sticker has no set_name (custom/one-time sticker)")
 
-    # Case 2: Learning new sticker pair (when it's a reply)
+    # Case 2: Learning new sticker pair (only if replying to bot)
     if message.reply_to_message and message.reply_to_message.sticker:
-        try:
-            chatai.insert_one({
-                "word": message.reply_to_message.sticker.file_unique_id,
-                "text": message.sticker.file_id,
-                "check": "sticker"
-            })
-            log.info("✅ Learned pair: %s -> %s",
-                     message.reply_to_message.sticker.file_unique_id,
-                     message.sticker.file_id)
-        except DuplicateKeyError:
-            log.info("⚠️ Duplicate pair skipped")
+        me = await client.get_me()
+
+        if message.reply_to_message.from_user and message.reply_to_message.from_user.id == me.id:
+            try:
+                chatai.insert_one({
+                    "word": message.reply_to_message.sticker.file_unique_id,
+                    "text": message.sticker.file_id,
+                    "check": "sticker"
+                })
+                log.info("✅ Learned pair: %s -> %s",
+                         message.reply_to_message.sticker.file_unique_id,
+                         message.sticker.file_id)
+            except DuplicateKeyError:
+                log.info("⚠️ Duplicate pair skipped")
+        else:
+            log.info("⏩ Ignored sticker reply (not replying to bot)")
