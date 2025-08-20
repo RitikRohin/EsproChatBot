@@ -6,6 +6,7 @@ import g4f
 from pymongo import MongoClient
 import asyncio
 import re
+import random
 
 # 🔧 Config
 BOT_USERNAME = "MissEsproBot"  # without @
@@ -50,35 +51,35 @@ async def smart_bot_handler(client, message: Message):
 
     try:
         user_input = message.text.strip().lower()
-        mention = message.from_user.mention  # user ko mention karne ke liye
+        mention = message.from_user.mention  # user mention
 
-        # 🔍 Check MongoDB
+        # 🔍 Check MongoDB for stored answers
         data = chatdb.find_one({"question": user_input})
-        if data:
-            return await message.reply(f"{mention} {data['answer']}")
+        if data and "answers" in data and data["answers"]:
+            return await message.reply(f"{mention} {random.choice(data['answers'])}")
 
-        # 🧠 Generate AI response
+        # 🧠 Generate AI response (short answer)
         prompt = f"""
 Tum ek real ladki ho. Har reply ladki ki jesa Hindi mein do. 
-Sirf 1-2 shabd ya chhota sa jawab do. Har bar alag jawab hona chahiye, repeat mat karna. 
+Sirf 1-2 shabd ka chhota reply do. Har bar alag jawab hona chahiye. 
 Thoda random behave karo.
 
 User: {message.text}
 Espro:
 """
 
-        response = await g4f.ChatCompletion.create(
+        response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[{"role": "user", "content": prompt}],
         )
 
         final_answer = (response or "").strip()
 
-        # ✅ Learn and save
+        # ✅ Learn and save new answer
         if final_answer:
             chatdb.update_one(
                 {"question": user_input},
-                {"$set": {"answer": final_answer}},
+                {"$push": {"answers": final_answer}},  # multiple answers store karo
                 upsert=True
             )
             await message.reply(f"{mention} {final_answer}")
@@ -88,7 +89,7 @@ Espro:
     except Exception as e:
         await message.reply(f"{mention} 😓 Error:\n" + str(e))
 
-# ✅ /teach command
+# ✅ /teach command (owner only)
 @app.on_message(filters.command("teach") & filters.text)
 async def teach_command(client, message: Message):
     if message.from_user.id != OWNER_ID:
@@ -105,7 +106,7 @@ async def teach_command(client, message: Message):
 
         chatdb.update_one(
             {"question": question},
-            {"$set": {"answer": answer}},
+            {"$push": {"answers": answer}},  # multiple answers store karo
             upsert=True
         )
 
