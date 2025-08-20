@@ -79,7 +79,9 @@ Espro:
                 {"$set": {"answer": final_answer}},
                 upsert=True
             )
-            await message.reply(final_answer)
+            await message.reply_text(
+    f"[{message.from_user.first_name}](tg://user?id={message.from_user.id}) {final_answer}"
+            )
         else:
             await message.reply("😓 Mujhe jawab nahi mila...")
 
