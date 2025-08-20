@@ -1,10 +1,12 @@
 # filename: sticker_bot.py
-from pyrogram import Client, filters
-from pyrogram.types import Message
-from pymongo import MongoClient
-from pymongo.errors import DuplicateKeyError
 import logging
 import asyncio
+import random
+from pyrogram import Client, filters
+from pyrogram.types import Message
+from pyrogram.enums import ChatAction
+from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
 
 from config import MONGO_URL
 from EsproChat import app   # your pyrogram Client
@@ -20,7 +22,7 @@ mongo = MongoClient(MONGO_URL)
 db = mongo["Word"]
 chatai = db["WordDb"]
 
-# ensure unique index
+# ensure unique index (word + text + check combination)
 chatai.create_index([("word", 1), ("text", 1), ("check", 1)], unique=True)
 
 
@@ -38,16 +40,22 @@ async def sticker_reply(client: Client, message: Message):
 
         if match:
             file_id = match[0]["text"]
-            # fake effect → typing action before sending sticker
-            await app.send_chat_action(message.chat.id, "typing")
-            await asyncio.sleep(1.5)  # delay for effect
+
+            # Step 1: Show "choosing sticker..."
+            await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
+
+            # Step 2: Random delay (1–3 sec) for natural effect
+            await asyncio.sleep(random.uniform(1.0, 3.0))
+
+            # Step 3: Reply with sticker
             await message.reply_sticker(file_id)
+
             log.info(f"✅ Sent sticker reply for {key}")
         else:
             log.info(f"⚠️ No sticker reply found for {key}")
         return
 
-    # Case 2: Learning
+    # Case 2: Learning new sticker pair
     reply_msg = message.reply_to_message
 
     me = await client.get_me()
@@ -59,7 +67,6 @@ async def sticker_reply(client: Client, message: Message):
             chatai.insert_one({
                 "word": reply_msg.sticker.file_unique_id,
                 "text": message.sticker.file_id,
-                "unique": message.sticker.file_unique_id,
                 "check": "sticker"
             })
             log.info("✅ Learned pair: %s -> %s",
