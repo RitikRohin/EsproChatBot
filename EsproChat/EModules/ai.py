@@ -56,10 +56,11 @@ async def smart_bot_handler(client, message: Message):
         if data:
             return await message.reply(data["answer"])
 
-        # 🧠 GPT fallback
-        prompt = f"""
-Tum ek real ladki ho. Har reply ladki ki jesa Hindi mein do. 
-Sirf 1-2 shabd ya chhota sa jawab do. Har bar alag jawab hona chahiye.
+prompt = f"""
+Tum ek real ladki ho. Har reply ladki ki jesa Hindi mein do.
+Sirf 1-2 shabd ya chhota sa jawab do.
+Har bar alag jawab hona chahiye, repeat mat karna.
+Thoda random behave karo.
 
 User: {message.text}
 Espro:
