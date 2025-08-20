@@ -36,8 +36,8 @@ def contains_link(text):
     link_pattern = r"(https?://\S+|t\.me/\S+|www\.\S+|[\w\-]+\.(com|in|net|org|xyz|me|link|ly|site|bio|store))"
     return bool(re.search(link_pattern, text.lower()))
 
-# ✅ Smart Chat Handler
-@app.on_message(filters.text & ~filters.regex(r"^/") & ~filters.regex(r"^\s*#"))
+# ✅ Smart Chat Handler (DM + Groups)
+@app.on_message(filters.text & (filters.private | filters.group) & ~filters.regex(r"^/") & ~filters.regex(r"^\s*#"))
 async def smart_bot_handler(client, message: Message):
     if is_message_for_someone_else(message):
         return  # ❌ Ignore replies or mentions
@@ -50,11 +50,12 @@ async def smart_bot_handler(client, message: Message):
 
     try:
         user_input = message.text.strip().lower()
+        mention = message.from_user.mention  # user ko mention karne ke liye
 
         # 🔍 Check MongoDB
         data = chatdb.find_one({"question": user_input})
         if data:
-            return await message.reply(data["answer"])
+            return await message.reply(f"{mention} {data['answer']}")
 
         # 🧠 Generate AI response
         prompt = f"""
@@ -80,12 +81,12 @@ Espro:
                 {"$set": {"answer": final_answer}},
                 upsert=True
             )
-            await message.reply(final_answer)
+            await message.reply(f"{mention} {final_answer}")
         else:
-            await message.reply("😓 Mujhe jawab nahi mila...")
+            await message.reply(f"{mention} 😓 Mujhe jawab nahi mila...")
 
     except Exception as e:
-        await message.reply("😓 Error:\n" + str(e))
+        await message.reply(f"{mention} 😓 Error:\n" + str(e))
 
 # ✅ /teach command
 @app.on_message(filters.command("teach") & filters.text)
