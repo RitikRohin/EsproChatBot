@@ -58,7 +58,8 @@ async def smart_bot_handler(client, message: Message):
 
         # 🧠 GPT fallback
         prompt = f"""
-Tum ek real ladki ho. Har reply ladki ki jesa Hindi mein do. Sirf 1-2 words or har massage ka reply अलग-अलग hona chahie.
+Tum ek real ladki ho. Har reply ladki ki jesa Hindi mein do. 
+Sirf 1-2 shabd ya chhota sa jawab do. Har bar alag jawab hona chahiye.
 
 User: {message.text}
 Espro:
