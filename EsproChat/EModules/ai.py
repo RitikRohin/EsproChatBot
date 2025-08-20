@@ -58,12 +58,13 @@ async def smart_bot_handler(client, message: Message):
 
         # 🧠 GPT fallback
         prompt = f"""
-Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho.
+Tum ek real ladki ho jo Hindi me friendly aur natural jawab deti ho.
+Har baar wording alag rakho taki repeat na lage.
+Reply hamesha short (1-2 line) aur thoda casual ho.
 
-User: {message.text}
+User: {user_input}
 Espro:
 """
-
         response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[{"role": "user", "content": prompt}],
