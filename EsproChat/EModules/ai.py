@@ -30,62 +30,56 @@ def contains_link(text):
     link_pattern = r"(https?://\S+|t\.me/\S+|www\.\S+|[\w\-]+\.(com|in|net|org|xyz|me|link|ly|site|bio|store))"
     return bool(re.search(link_pattern, text.lower()))
 
-# ✅ Smart Chat Handler (GPT only, DM + Group fix)
+# ✅ Smart Chat Handler
 @app.on_message(filters.text & ~filters.regex(r"^/"))
 async def smart_bot_handler(client, message: Message):
-    # ❌ Ignore agar non-text ho
     if not message.text:
-        return  
-
-    # ❌ Ignore agar message '#' se start ho
+        return
     if message.text.strip().startswith("#"):
-        return  
-
-    # ❌ Ignore agar message link ho
+        return
     if contains_link(message.text):
-        return  
+        return
 
     # ✅ Group me dusre ko reply/mention ignore karo
     if message.chat.type in ["group", "supergroup"]:
         if is_message_for_someone_else(message):
-            return  
-
-    # ✅ Typing action
-    await message.reply_chat_action(ChatAction.TYPING)
-    await asyncio.sleep(1)
+            return
+        if not message.text.lower().startswith(f"@{BOT_USERNAME.lower()}"):
+            return
 
     try:
         user_input = message.text.strip()
 
         # 🧠 GPT Prompt
         prompt = f"""
-Tum ek real ladki ho. reply Hindi me.
-Reply short (1-2 line) aur friendly ho.
-Har baar thoda different wording use karo taki repeat na lage.
-Thoda natural aur human jaise feel ho.
+        Tum ek real ladki ho jo Hindi me friendly aur natural jawab deti ho.
+        Har baar wording alag rakho taki repeat na lage.
+        Reply hamesha short (1-2 line) aur thoda casual ho.
 
-User: {user_input}
-Espro:
-"""
+        User: {user_input}
+        Espro:
+        """
+
 
         # 🎯 GPT Response
         response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.9,  # 🔥 more randomness
+            temperature=0.9,
         )
 
-        # 📝 Response handle
-        if isinstance(response, dict) and "choices" in response:
-            final_answer = response["choices"][0]["message"]["content"].strip()
-        else:
-            final_answer = str(response).strip()
+        final_answer = (
+            response["choices"][0]["message"]["content"].strip()
+            if isinstance(response, dict) and "choices" in response
+            else str(response).strip()
+        )
 
-        # ✅ Reply
+        # ✨ Placeholder ko edit karke final answer bhejo
         if final_answer:
-            await message.reply(final_answer)
+            await sent.edit(final_answer)
         else:
-            await message.reply("😓 Mujhe jawab nahi mila...")
+            await sent.edit("😅 Kuch samajh nahi aaya...")
 
     except Exception as e:
-        await message.reply("😓 Error:\n" + str(e))
+        await message.reply("😅 Thoda problem ho gaya, phir try karo...")
+        print("Error:", e)
