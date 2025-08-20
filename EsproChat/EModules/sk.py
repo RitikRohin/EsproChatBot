@@ -1,7 +1,7 @@
-# filename: sticker_bot.py
 import logging
 import asyncio
 import random
+import aiohttp
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pyrogram.enums import ChatAction
@@ -23,14 +23,25 @@ db = mongo["Word"]
 chatai = db["WordDb"]
 
 # ensure unique index
-chatai.create_index([("word", 1), ("text", 1), ("check", 1)], unique=True, background=True)
+chatai.create_index([("word", 1), ("text", 1), ("check", 1)], unique=True)
+
+
+# ---------------- Helper: Fetch sticker set via Bot API ----------------
+async def fetch_sticker_set(bot_token: str, set_name: str):
+    url = f"https://api.telegram.org/bot{bot_token}/getStickerSet?name={set_name}"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            data = await resp.json()
+            if data.get("ok"):
+                return data["result"]["stickers"]
+            return None
 
 
 # ---------------- Sticker Handler ----------------
 @app.on_message(filters.sticker & ~filters.bot)
 async def sticker_reply(client: Client, message: Message):
 
-    # Case 1: Auto reply from DB
+    # Case 1: Sticker without reply → auto reply
     if not message.reply_to_message:
         key = message.sticker.file_unique_id
         match = list(chatai.aggregate([
@@ -45,23 +56,23 @@ async def sticker_reply(client: Client, message: Message):
             await asyncio.sleep(random.uniform(1.0, 3.0))
             await message.reply_sticker(file_id)
 
-            log.info(f"✅ Sent sticker reply for {key} (from DB)")
+            log.info(f"✅ Sent sticker reply for {key}")
             return
 
         # ---------------- If no DB match → Reply from Sticker Pack ----------------
         if message.sticker.set_name:
             try:
-                sticker_set = await client.get_sticker_set(message.sticker.set_name)
-                if sticker_set and sticker_set.stickers:
-                    random_sticker = random.choice(sticker_set.stickers)
+                stickers = await fetch_sticker_set(client.bot_token, message.sticker.set_name)
+                if stickers:
+                    random_sticker = random.choice(stickers)
 
                     await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
                     await asyncio.sleep(random.uniform(1.0, 2.0))
-                    await message.reply_sticker(random_sticker.file_id)
+                    await message.reply_sticker(random_sticker["file_id"])
 
                     log.info(f"✅ Auto-replied from sticker pack {message.sticker.set_name}")
                 else:
-                    log.info("⚠️ Sticker set fetch failed or empty")
+                    log.info("⚠️ Sticker set fetch failed")
             except Exception as e:
                 log.error(f"❌ Failed to fetch sticker set: {e}")
         else:
@@ -70,11 +81,6 @@ async def sticker_reply(client: Client, message: Message):
 
     # Case 2: Learning new sticker pair
     reply_msg = message.reply_to_message
-    me = await client.get_me()
-
-    # Ignore only if reply is bot's *non-sticker* message
-    if reply_msg.from_user and reply_msg.from_user.id == me.id and not reply_msg.sticker:
-        return
 
     if reply_msg.sticker and message.sticker:
         try:
@@ -86,7 +92,11 @@ async def sticker_reply(client: Client, message: Message):
             log.info("✅ Learned pair: %s -> %s",
                      reply_msg.sticker.file_unique_id,
                      message.sticker.file_id)
+
+            # ⚡ NEW FEATURE: Turant learned sticker se reply karo
+            await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
+            await asyncio.sleep(random.uniform(1.0, 2.0))
+            await message.reply_sticker(message.sticker.file_id)
+
         except DuplicateKeyError:
-            log.info("⚠️ Duplicate pair skipped: %s -> %s",
-                     reply_msg.sticker.file_unique_id,
-                     message.sticker.file_id)
+            log.info("⚠️ Duplicate pair skipped")
