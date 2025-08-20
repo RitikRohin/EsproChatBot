@@ -41,24 +41,23 @@ async def fetch_sticker_set(bot_token: str, set_name: str):
 @app.on_message(filters.sticker & ~filters.bot)
 async def sticker_reply(client: Client, message: Message):
 
-    # Case 1: Sticker without reply → auto reply
-    if not message.reply_to_message:
-        key = message.sticker.file_unique_id
-        match = list(chatai.aggregate([
-            {"$match": {"word": key, "check": "sticker"}},
-            {"$sample": {"size": 1}}
-        ]))
+    key = message.sticker.file_unique_id
 
-        if match:
-            file_id = match[0]["text"]
+    # Case 1: Auto reply from DB
+    match = list(chatai.aggregate([
+        {"$match": {"word": key, "check": "sticker"}},
+        {"$sample": {"size": 1}}
+    ]))
 
-            await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
-            await asyncio.sleep(random.uniform(1.0, 3.0))
-            await message.reply_sticker(file_id)
+    if match:
+        file_id = match[0]["text"]
 
-            log.info(f"✅ Sent sticker reply for {key}")
-            return
+        await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
+        await asyncio.sleep(random.uniform(1.0, 3.0))
+        await message.reply_sticker(file_id)
 
+        log.info(f"✅ Sent sticker reply for {key}")
+    else:
         # ---------------- If no DB match → Reply from Sticker Pack ----------------
         if message.sticker.set_name:
             try:
@@ -77,26 +76,17 @@ async def sticker_reply(client: Client, message: Message):
                 log.error(f"❌ Failed to fetch sticker set: {e}")
         else:
             log.info("⚠️ Sticker has no set_name (custom/one-time sticker)")
-        return
 
-    # Case 2: Learning new sticker pair
-    reply_msg = message.reply_to_message
-
-    if reply_msg.sticker and message.sticker:
+    # Case 2: Learning new sticker pair (when it's a reply)
+    if message.reply_to_message and message.reply_to_message.sticker:
         try:
             chatai.insert_one({
-                "word": reply_msg.sticker.file_unique_id,
+                "word": message.reply_to_message.sticker.file_unique_id,
                 "text": message.sticker.file_id,
                 "check": "sticker"
             })
             log.info("✅ Learned pair: %s -> %s",
-                     reply_msg.sticker.file_unique_id,
+                     message.reply_to_message.sticker.file_unique_id,
                      message.sticker.file_id)
-
-            # ⚡ NEW FEATURE: Turant learned sticker se reply karo
-            await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
-            await asyncio.sleep(random.uniform(1.0, 2.0))
-            await message.reply_sticker(message.sticker.file_id)
-
         except DuplicateKeyError:
             log.info("⚠️ Duplicate pair skipped")
