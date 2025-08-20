@@ -57,9 +57,8 @@ async def smart_bot_handler(client, message: Message):
             return await message.reply(data["answer"])
 
 prompt = f"""
-Tum ek real ladki ho. Har reply ladki ki jesa Hindi mein do.
-Sirf 1-2 shabd ya chhota sa jawab do.
-Har bar alag jawab hona chahiye, repeat mat karna.
+Tum ek real ladki ho. Har reply ladki ki jesa Hindi mein do. 
+Sirf 1-2 shabd ya chhota sa jawab do. Har bar alag jawab hona chahiye, repeat mat karna. 
 Thoda random behave karo.
 
 User: {message.text}
@@ -80,9 +79,7 @@ Espro:
                 {"$set": {"answer": final_answer}},
                 upsert=True
             )
-            await message.reply_text(
-    f"[{message.from_user.first_name}](tg://user?id={message.from_user.id}) {final_answer}"
-            )
+            await message.reply(final_answer)
         else:
             await message.reply("😓 Mujhe jawab nahi mila...")
 
