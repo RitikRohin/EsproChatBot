@@ -2,6 +2,7 @@
 import logging
 import asyncio
 import random
+import aiohttp
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pyrogram.enums import ChatAction
@@ -24,6 +25,17 @@ chatai = db["WordDb"]
 
 # ensure unique index
 chatai.create_index([("word", 1), ("text", 1), ("check", 1)], unique=True)
+
+
+# ---------------- Helper: Fetch sticker set via Bot API ----------------
+async def fetch_sticker_set(bot_token: str, set_name: str):
+    url = f"https://api.telegram.org/bot{bot_token}/getStickerSet?name={set_name}"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            data = await resp.json()
+            if data.get("ok"):
+                return data["result"]["stickers"]
+            return None
 
 
 # ---------------- Sticker Handler ----------------
@@ -51,17 +63,17 @@ async def sticker_reply(client: Client, message: Message):
         # ---------------- If no DB match → Reply from Sticker Pack ----------------
         if message.sticker.set_name:
             try:
-                sticker_set = await client.get_sticker_set(message.sticker.set_name)
-                if sticker_set.stickers:
-                    random_sticker = random.choice(sticker_set.stickers)
+                stickers = await fetch_sticker_set(client.bot_token, message.sticker.set_name)
+                if stickers:
+                    random_sticker = random.choice(stickers)
 
                     await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
                     await asyncio.sleep(random.uniform(1.0, 2.0))
-                    await message.reply_sticker(random_sticker.file_id)
+                    await message.reply_sticker(random_sticker["file_id"])
 
                     log.info(f"✅ Auto-replied from sticker pack {message.sticker.set_name}")
                 else:
-                    log.info("⚠️ Sticker set has no stickers")
+                    log.info("⚠️ Sticker set fetch failed")
             except Exception as e:
                 log.error(f"❌ Failed to fetch sticker set: {e}")
         else:
