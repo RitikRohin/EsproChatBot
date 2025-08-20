@@ -54,11 +54,12 @@ async def sticker_reply(client: Client, message: Message):
 
         await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
         await asyncio.sleep(random.uniform(1.0, 3.0))
-        await message.reply_sticker(file_id)
+        reply_msg = await message.reply_sticker(file_id)
 
         log.info(f"✅ Sent sticker reply for {key}")
     else:
         # ---------------- If no DB match → Reply from Sticker Pack ----------------
+        reply_msg = None
         if message.sticker.set_name:
             try:
                 stickers = await fetch_sticker_set(client.bot_token, message.sticker.set_name)
@@ -67,7 +68,7 @@ async def sticker_reply(client: Client, message: Message):
 
                     await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
                     await asyncio.sleep(random.uniform(1.0, 2.0))
-                    await message.reply_sticker(random_sticker["file_id"])
+                    reply_msg = await message.reply_sticker(random_sticker["file_id"])
 
                     log.info(f"✅ Auto-replied from sticker pack {message.sticker.set_name}")
                 else:
