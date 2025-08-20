@@ -10,7 +10,7 @@ import re
 BOT_USERNAME = "MissEsproBot"  # without @
 OWNER_ID = 7666870729
 
-# ❌ Ignore if replying to or mentioning someone else
+# ❌ Ignore if replying to or mentioning someone else (for group only)
 def is_message_for_someone_else(message: Message):
     if message.reply_to_message:
         replied_user = message.reply_to_message.from_user
@@ -30,24 +30,25 @@ def contains_link(text):
     link_pattern = r"(https?://\S+|t\.me/\S+|www\.\S+|[\w\-]+\.(com|in|net|org|xyz|me|link|ly|site|bio|store))"
     return bool(re.search(link_pattern, text.lower()))
 
-# ✅ Smart Chat Handler (GPT only, works in group + DM)
+# ✅ Smart Chat Handler (GPT only, DM + Group fix)
 @app.on_message(filters.text & ~filters.regex(r"^/"))
 async def smart_bot_handler(client, message: Message):
-    # ❌ Ignore agar dusre user ko reply/mention ho
-    if is_message_for_someone_else(message):
-        return  
-
     # ❌ Ignore agar non-text ho
     if not message.text:
+        return  
+
+    # ❌ Ignore agar message '#' se start ho
+    if message.text.strip().startswith("#"):
         return  
 
     # ❌ Ignore agar message link ho
     if contains_link(message.text):
         return  
 
-    # ❌ Ignore agar message '#' se start ho
-    if message.text.strip().startswith("#"):
-        return  
+    # ✅ Group me dusre ko reply/mention ignore karo
+    if message.chat.type in ["group", "supergroup"]:
+        if is_message_for_someone_else(message):
+            return  
 
     # ✅ Typing action
     await message.reply_chat_action(ChatAction.TYPING)
@@ -71,7 +72,7 @@ Espro:
         response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.9,  # 🔥 Higher = more random replies
+            temperature=0.9,  # 🔥 more randomness
         )
 
         # 📝 Response handle
