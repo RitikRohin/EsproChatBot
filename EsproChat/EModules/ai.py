@@ -56,7 +56,8 @@ async def smart_bot_handler(client, message: Message):
         if data:
             return await message.reply(data["answer"])
 
-prompt = f"""
+        # 🧠 Generate AI response
+        prompt = f"""
 Tum ek real ladki ho. Har reply ladki ki jesa Hindi mein do. 
 Sirf 1-2 shabd ya chhota sa jawab do. Har bar alag jawab hona chahiye, repeat mat karna. 
 Thoda random behave karo.
@@ -65,12 +66,12 @@ User: {message.text}
 Espro:
 """
 
-        response = g4f.ChatCompletion.create(
+        response = await g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[{"role": "user", "content": prompt}],
         )
 
-        final_answer = response.strip()
+        final_answer = (response or "").strip()
 
         # ✅ Learn and save
         if final_answer:
