@@ -9,13 +9,11 @@ from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 
 from config import MONGO_URL
-from EsproChat import app   # your pyrogram Client
-
+from EsproChat import app   # pyrogram Client instance
 
 # ---------------- Logging ----------------
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("StickerBot")
-
 
 # ---------------- MongoDB ----------------
 mongo = MongoClient(MONGO_URL)
@@ -40,50 +38,39 @@ async def fetch_sticker_set(bot_token: str, set_name: str):
 # ---------------- Sticker Handler ----------------
 @app.on_message(filters.sticker & ~filters.bot)
 async def sticker_reply(client: Client, message: Message):
+    me = await client.get_me()
 
-    key = message.sticker.file_unique_id
-
-    # ---------------- Case 1: Auto reply from DB ----------------
-    match = list(chatai.aggregate([
-        {"$match": {"word": key, "check": "sticker"}},
-        {"$sample": {"size": 1}}
-    ]))
-
-    if match:
-        file_id = match[0]["text"]
-
-        await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
-        await asyncio.sleep(random.uniform(1.0, 3.0))
-        reply_msg = await message.reply_sticker(file_id)
-
-        log.info(f"✅ Sent sticker reply for {key}")
-    else:
-        # ---------------- If no DB match → Reply from Sticker Pack ----------------
-        reply_msg = None
-        if message.sticker.set_name:
-            try:
-                stickers = await fetch_sticker_set(client.bot_token, message.sticker.set_name)
-                if stickers:
-                    random_sticker = random.choice(stickers)
-
-                    await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
-                    await asyncio.sleep(random.uniform(1.0, 2.0))
-                    reply_msg = await message.reply_sticker(random_sticker["file_id"])
-
-                    log.info(f"✅ Auto-replied from sticker pack {message.sticker.set_name}")
-                else:
-                    log.info("⚠️ Sticker set fetch failed")
-            except Exception as e:
-                log.error(f"❌ Failed to fetch sticker set: {e}")
-        else:
-            log.info("⚠️ Sticker has no set_name (custom/one-time sticker)")
-
-    # ---------------- Case 2: Learning new sticker pair ----------------
+    # ---------------- Case 2: Learning (reply to bot's sticker) ----------------
     if message.reply_to_message and message.reply_to_message.sticker:
-        me = await client.get_me()
-
-        # ✅ Only learn if the replied message is from the bot
+        # only if reply is to bot's sticker
         if message.reply_to_message.from_user and message.reply_to_message.from_user.id == me.id:
+            key = message.sticker.file_unique_id
+
+            # First check DB
+            match = list(chatai.aggregate([
+                {"$match": {"word": key, "check": "sticker"}},
+                {"$sample": {"size": 1}}
+            ]))
+
+            if match:
+                file_id = match[0]["text"]
+                await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
+                await asyncio.sleep(random.uniform(1.0, 2.5))
+                await message.reply_sticker(file_id)
+            else:
+                # Fallback: from sticker pack
+                if message.sticker.set_name:
+                    try:
+                        stickers = await fetch_sticker_set(client.bot_token, message.sticker.set_name)
+                        if stickers:
+                            random_sticker = random.choice(stickers)
+                            await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
+                            await asyncio.sleep(random.uniform(1.0, 2.0))
+                            await message.reply_sticker(random_sticker["file_id"])
+                    except Exception as e:
+                        log.error(f"❌ Failed to fetch sticker set: {e}")
+
+            # Save learning pair (X → B)
             try:
                 chatai.insert_one({
                     "word": message.reply_to_message.sticker.file_unique_id,
@@ -97,3 +84,30 @@ async def sticker_reply(client: Client, message: Message):
                 log.info("⚠️ Duplicate pair skipped")
         else:
             log.info("⏩ Ignored sticker reply (because it was replying to another user)")
+        return
+
+    # ---------------- Case 1: Normal Sticker (no reply) ----------------
+    key = message.sticker.file_unique_id
+    match = list(chatai.aggregate([
+        {"$match": {"word": key, "check": "sticker"}},
+        {"$sample": {"size": 1}}
+    ]))
+
+    if match:
+        file_id = match[0]["text"]
+        await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
+        await asyncio.sleep(random.uniform(1.0, 3.0))
+        await message.reply_sticker(file_id)
+        log.info(f"✅ Sent sticker reply for {key}")
+    else:
+        if message.sticker.set_name:
+            try:
+                stickers = await fetch_sticker_set(client.bot_token, message.sticker.set_name)
+                if stickers:
+                    random_sticker = random.choice(stickers)
+                    await client.send_chat_action(message.chat.id, ChatAction.CHOOSE_STICKER)
+                    await asyncio.sleep(random.uniform(1.0, 2.0))
+                    await message.reply_sticker(random_sticker["file_id"])
+                    log.info(f"✅ Auto-replied from sticker pack {message.sticker.set_name}")
+            except Exception as e:
+                log.error(f"❌ Failed to fetch sticker set: {e}")
