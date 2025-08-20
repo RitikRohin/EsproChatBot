@@ -3,14 +3,20 @@ from pyrogram import filters
 from pyrogram.enums import ChatAction
 from pyrogram.types import Message
 import g4f
+from pymongo import MongoClient
 import asyncio
 import re
 
 # 🔧 Config
 BOT_USERNAME = "MissEsproBot"  # without @
 OWNER_ID = 7666870729
+MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro"
 
-# ❌ Ignore if replying to or mentioning someone else (for group only)
+# ✅ MongoDB setup
+mongo = MongoClient(MONGO_URI)
+chatdb = mongo.ChatDB.chat_data
+
+# ❌ Ignore if replying to or mentioning someone else
 def is_message_for_someone_else(message: Message):
     if message.reply_to_message:
         replied_user = message.reply_to_message.from_user
@@ -33,53 +39,74 @@ def contains_link(text):
 # ✅ Smart Chat Handler
 @app.on_message(filters.text & ~filters.regex(r"^/"))
 async def smart_bot_handler(client, message: Message):
-    if not message.text:
-        return
-    if message.text.strip().startswith("#"):
-        return
-    if contains_link(message.text):
-        return
+    if is_message_for_someone_else(message):
+        return  # ❌ Ignore replies or mentions
 
-    # ✅ Group me dusre ko reply/mention ignore karo
-    if message.chat.type in ["group", "supergroup"]:
-        if is_message_for_someone_else(message):
-            return
-        if not message.text.lower().startswith(f"@{BOT_USERNAME.lower()}"):
-            return
+    if contains_link(message.text):
+        return  # ❌ Ignore messages with links
+
+    await message.reply_chat_action(ChatAction.TYPING)
+    await asyncio.sleep(1)
 
     try:
-        user_input = message.text.strip()
+        user_input = message.text.strip().lower()
 
-        # 🧠 GPT Prompt
+        # 🔍 Check MongoDB
+        data = chatdb.find_one({"question": user_input})
+        if data:
+            return await message.reply(data["answer"])
+
+        # 🧠 GPT fallback
         prompt = f"""
-        Tum ek real ladki ho jo Hindi me friendly aur natural jawab deti ho.
-        Har baar wording alag rakho taki repeat na lage.
-        Reply hamesha short (1-2 line) aur thoda casual ho.
+Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho.
 
-        User: {user_input}
-        Espro:
-        """
+User: {message.text}
+Espro:
+"""
 
-
-        # 🎯 GPT Response
         response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.9,
         )
 
-        final_answer = (
-            response["choices"][0]["message"]["content"].strip()
-            if isinstance(response, dict) and "choices" in response
-            else str(response).strip()
-        )
+        final_answer = response.strip()
 
-        # ✨ Placeholder ko edit karke final answer bhejo
+        # ✅ Learn and save
         if final_answer:
-            await sent.edit(final_answer)
+            chatdb.update_one(
+                {"question": user_input},
+                {"$set": {"answer": final_answer}},
+                upsert=True
+            )
+            await message.reply(final_answer)
         else:
-            await sent.edit("😅 Kuch samajh nahi aaya...")
+            await message.reply("😓 Mujhe jawab nahi mila...")
 
     except Exception as e:
-        await message.reply("😅 Thoda problem ho gaya, phir try karo...")
-        print("Error:", e)
+        await message.reply("😓 Error:\n" + str(e))
+
+# ✅ /teach command
+@app.on_message(filters.command("teach") & filters.text)
+async def teach_command(client, message: Message):
+    if message.from_user.id != OWNER_ID:
+        return await message.reply("❌ Sirf bot owner hi /teach use kar sakta hai.")
+
+    try:
+        text = message.text.split(" ", 1)[1]
+        if "|" not in text:
+            return await message.reply("❌ Format:\n`/teach question | answer`")
+
+        question, answer = text.split("|", 1)
+        question = question.strip().lower()
+        answer = answer.strip()
+
+        chatdb.update_one(
+            {"question": question},
+            {"$set": {"answer": answer}},
+            upsert=True
+        )
+
+        await message.reply("✅ Bot ne naya jawab yaad kar liya!")
+
+    except Exception as e:
+        await message.reply("😓 Error:\n" + str(e))
