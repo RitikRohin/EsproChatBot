@@ -39,7 +39,7 @@ async def sticker_reply(client: Client, message: Message):
         if match:
             file_id = match[0]["text"]
             # fake effect → typing action before sending sticker
-            await app.send_chat_action(message.chat.id, "ch👀sing a sticker")
+            await app.send_chat_action(message.chat.id, "typing")
             await asyncio.sleep(1.5)  # delay for effect
             await message.reply_sticker(file_id)
             log.info(f"✅ Sent sticker reply for {key}")
