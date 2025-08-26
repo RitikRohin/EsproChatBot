@@ -15,3 +15,4 @@ aiohttp
 matplotlib
 g4f
 moviepy==1.0.3
+gunicorn
