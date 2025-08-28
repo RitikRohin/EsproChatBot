@@ -16,3 +16,4 @@ matplotlib
 g4f
 moviepy==1.0.3
 gunicorn
+typing_extensions
