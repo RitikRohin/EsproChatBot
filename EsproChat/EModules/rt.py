@@ -1,5 +1,6 @@
 from pyrogram import Client, filters
 from g4f import ChatCompletion
+from EsproChat import app
 
 
 @app.on_message(filters.text)
