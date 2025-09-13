@@ -59,12 +59,14 @@ Espro:
 
         final_answer = response.strip() if response else "😅 Mujhe samajh nahi aaya..."
 
-        # 👑 Agar Boss message kare to uska mention add karo
+        # 👑 Agar Boss message kare to uska naam + clickable mention (HTML format)
         if message.from_user.id == SPECIFIC_USER_ID:
-            boss_mention = message.from_user.mention
+            boss_mention = f"<a href='tg://user?id={SPECIFIC_USER_ID}'>{message.from_user.first_name}</a>"
             final_answer = f"{boss_mention} {final_answer}"
-
-        await message.reply(final_answer, parse_mode=ParseMode.MARKDOWN)
+            await message.reply(final_answer, parse_mode=ParseMode.HTML)
+        else:
+            # Normal users ke liye bas simple reply
+            await message.reply(final_answer)
 
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
