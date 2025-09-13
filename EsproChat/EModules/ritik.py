@@ -30,22 +30,24 @@ def contains_link(text):
     link_pattern = r"(https?://\S+|t\.me/\S+|www\.\S+|\S+\.\w{2,})"
     return bool(re.search(link_pattern, text.lower()))
 
-# ✅ Smart Chat Handler (AI replies fast)
+# ✅ Smart Chat Handler (Fast Reply)
 @app.on_message(filters.text & ~filters.regex(r"^[/#]"))
 async def smart_bot_handler(client, message: Message):
     if is_message_for_someone_else(message) or contains_link(message.text):
         return
 
+    # show typing (optional)
     await message.reply_chat_action(ChatAction.TYPING)
 
     prompt = f"""
-Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho or reply repeat nahin hona chahie.
+Tum ek real ladki ho. Har reply chhoti aur friendly Hindi mein do. Sirf 1-2 line likho aur reply repeat nahi hona chahiye.
 
 User: {message.text}
 Espro:
 """
 
     try:
+        # run g4f in background for speed
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
             None,
@@ -54,18 +56,13 @@ Espro:
                 messages=[{"role": "user", "content": prompt}],
             )
         )
+
         final_answer = response.strip() if response else "😅 Mujhe samajh nahi aaya..."
 
-        # 👑 Agar Boss message kare to uska naam clickable mention ho
+        # 👑 Agar Boss message kare to uska mention add karo
         if message.from_user.id == SPECIFIC_USER_ID:
-            boss_name = message.from_user.first_name
-            if message.from_user.last_name:
-                boss_name += f" {message.from_user.last_name}"
-
-            if message.from_user.username:
-                final_answer = f"[{boss_name}](https://t.me/{message.from_user.username}) {final_answer}"
-            else:
-                final_answer = f"{boss_name} {final_answer}"
+            boss_mention = message.from_user.mention
+            final_answer = f"{boss_mention} {final_answer}"
 
         await message.reply(final_answer, parse_mode=ParseMode.MARKDOWN)
 
