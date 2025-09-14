@@ -45,27 +45,25 @@ INHELPBUTTON = InlineKeyboardMarkup([
 def START_BUTTON(OWNER: Union[bool, int] = None):    
     button = InlineKeyboardMarkup(
             [
+                
                 [
                     InlineKeyboardButton(
-                        text="ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ 💓",
-                        url=f"https://t.me/{app.username}?startgroup=true",
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="ʜᴇʟᴘ & ᴄᴏᴍᴍᴀɴᴅꜱ ",
+                        text="🔎 Hᴏᴡ Tᴏ Usᴇ? Cᴏᴍᴍᴀɴᴅ Mᴇɴᴜ",
                         callback_data="gohelp",
                     ),
                 ],
                 [
                     InlineKeyboardButton(
-                        text="ᴅᴇᴠᴇʟᴏᴘᴇʀ ",
+                        text="✚ Aᴅᴅ Mᴇ Tᴏ Yᴏᴜʀ Gʀᴏᴜᴘ ✚",
+                        url=f"https://t.me/{app.username}?startgroup=true",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="👤 Oᴡɴᴇʀ",
                         user_id=OWNER,
                     ),
-                    InlineKeyboardButton(
-                        text="ꜱᴜᴘᴘᴏʀᴛ",
-                        url=f"https://t.me/{SUPPORT_GROUP}",
-                    ),
+                    
                 ],
             ]
         )
