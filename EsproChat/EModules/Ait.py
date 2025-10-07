@@ -22,7 +22,7 @@ except (KeyError, ValueError):
     OWNER_ID = 7666870729 # Default owner ID
     print("⚠️ WARNING: OWNER_ID not set in environment. Using default.")
 
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb-cluster-uri-here")
 
 
 # ✅ MongoDB setup
@@ -183,7 +183,7 @@ async def smart_bot_handler(client, message: Message):
 
         # 2. 💖 Check for Mood-Based Replies (High Priority)
         
-        # 👋 Special case: hi/hello (MODIFIED to mention user and not save to DB)
+        # 👋 Special case: hi/hello (Mentions user and skips DB save)
         if user_input in ["hi", "hello", "hey", "hii", "heyy", "hey espro"]:
             user_mention = message.from_user.mention # Get the user's mention string
             greetings = [
@@ -218,7 +218,8 @@ async def smart_bot_handler(client, message: Message):
 
 
         # 3. 🔍 Check MongoDB (Medium Priority - Cache)
-        if chatdb:
+        # FIX: Changed 'if chatdb:' to 'if chatdb is not None:'
+        if chatdb is not None: 
             data = chatdb.find_one({"question": user_input})
             if data and data.get("answers"):
                 selected_answer = random.choice(data["answers"])
@@ -240,7 +241,8 @@ Espro:
 
         # ✅ Learn and save only if MongoDB is connected
         if final_answer:
-            if chatdb:
+            # FIX: Changed 'if chatdb:' to 'if chatdb is not None:'
+            if chatdb is not None: 
                 chatdb.update_one(
                     {"question": user_input},
                     {"$addToSet": {"answers": final_answer}},
@@ -262,7 +264,8 @@ async def teach_command(client, message: Message):
     if message.from_user.id != OWNER_ID:
         return await message.reply("❌ Sirf bot owner hi /teach use kar sakta hai.")
     
-    if not chatdb:
+    # FIX: Changed 'if not chatdb:' to 'if chatdb is None:'
+    if chatdb is None: 
         return await message.reply("❌ Database connected nahi hai. /teach use nahi kar sakte.")
 
     try:
@@ -291,7 +294,8 @@ async def unlearn_command(client, message: Message):
     if message.from_user.id != OWNER_ID:
         return await message.reply("❌ Sirf bot owner hi /unlearn use kar sakta hai.")
     
-    if not chatdb:
+    # FIX: Changed 'if not chatdb:' to 'if chatdb is None:'
+    if chatdb is None: 
         return await message.reply("❌ Database connected nahi hai. /unlearn use nahi kar sakte.")
 
     try:
@@ -317,7 +321,8 @@ async def clear_db_command(client, message: Message):
     if message.from_user.id != OWNER_ID:
         return await message.reply("❌ Sirf bot owner hi /cleardb use kar sakta hai.")
     
-    if not chatdb:
+    # FIX: Changed 'if not chatdb:' to 'if chatdb is None:'
+    if chatdb is None: 
         return await message.reply("❌ Database connected nahi hai. /cleardb use nahi kar sakte.")
     
     if len(message.command) < 2 or message.command[1].lower() != "confirm":
