@@ -12,7 +12,7 @@ from pymongo import MongoClient
 BOT_USERNAME = "MissEsproBot"  # without @
 OWNER_ID = 7666870729
 # ⚠️ IMPORTANT: Replace this placeholder with your actual MongoDB connection URI
-MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro" # Replace with your actual URI
+MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro"
 
 # ----------------- 💖 Mood-Based Replies 💖 -----------------
 # These replies are given the highest priority based on keywords.
@@ -99,7 +99,7 @@ async def smart_bot_handler(client, message: Message):
         # 1. 💖 Check for Mood-Based Replies (Highest Priority)
         
         # 👋 Special case: hi/hello
-        if user_input in ["hi", "hello", "hey", "hii", "heyy", "hey tamanna"]:
+        if user_input in ["hi", "hello", "hey", "hii", "heyy", "hey espro"]: # Name updated
             greetings = [
                 "Hello Jaan 😘, kaise ho? 💖",
                 "Hi! Aur batao, kya haal hai? 😊",
@@ -134,10 +134,10 @@ async def smart_bot_handler(client, message: Message):
         # 3. 🧠 g4f fallback (Lowest Priority - Learning)
         prompt = f"""
 Tum ek real ladki ho. Har reply chhoti aur friendly Hindi (Hinglish) mein do. Sirf 1-2 line likho.
-Tumhara naam Tamanna hai.
+Tumhara naam Espro hai. # Name updated in prompt
 
 User: {message.text}
-Tamanna:
+Espro: # Name updated in prompt
 """
         response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4, 
