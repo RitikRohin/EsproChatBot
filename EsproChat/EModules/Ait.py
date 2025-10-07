@@ -22,7 +22,7 @@ except (KeyError, ValueError):
     OWNER_ID = 7666870729 # Default owner ID
     print("⚠️ WARNING: OWNER_ID not set in environment. Using default.")
 
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb-cluster-uri-here")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro")
 
 
 # ✅ MongoDB setup
