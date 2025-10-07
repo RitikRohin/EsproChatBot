@@ -1,4 +1,4 @@
-import random # <-- नया इम्पोर्ट
+import random 
 from EsproChat import app
 from pyrogram import filters
 from pyrogram.enums import ChatAction
@@ -11,11 +11,14 @@ import re
 # 🔧 Config
 BOT_USERNAME = "MissEsproBot"  # without @
 OWNER_ID = 7666870729
-MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro"
+MONGO_URI = "mongodb+srv://esproaibot:esproai12307@espro.rz2fl.mongodb.net/?retryWrites=true&w=majority&appName=Espro" # Replace with your actual URI
 
 # ✅ MongoDB setup
 mongo = MongoClient(MONGO_URI)
+# Note: Ensure the connection details (MONGO_URI) are correct.
 chatdb = mongo.ChatDB.chat_data
+
+# --- Helper Functions ---
 
 # ❌ Ignore if replying to or mentioning someone else
 def is_message_for_someone_else(message: Message):
@@ -37,14 +40,16 @@ def contains_link(text):
     link_pattern = r"(https?://\S+|t\.me/\S+|www\.\S+|[\w\-]+\.(com|in|net|org|xyz|me|link|ly|site|bio|store))"
     return bool(re.search(link_pattern, text.lower()))
 
-# ✅ Smart Chat Handler (Updated to handle multiple answers)
+# --- Chat Handlers ---
+
+# ✅ Smart Chat Handler (Uses 'answers' list and random choice)
 @app.on_message(filters.text & ~filters.regex(r"^[/#]"))
 async def smart_bot_handler(client, message: Message):
     if is_message_for_someone_else(message):
-        return  # ❌ Ignore replies or mentions
+        return
 
     if contains_link(message.text):
-        return  # ❌ Ignore messages with links
+        return
 
     await message.reply_chat_action(ChatAction.TYPING)
     await asyncio.sleep(1)
@@ -52,10 +57,9 @@ async def smart_bot_handler(client, message: Message):
     try:
         user_input = message.text.strip().lower()
 
-        # 🔍 Check MongoDB: 'answers' list को चेक करें
+        # 🔍 Check MongoDB: 'answers' list से रैंडम जवाब चुनें
         data = chatdb.find_one({"question": user_input})
         if data and data.get("answers"):
-            # अगर answers लिस्ट मौजूद है, तो रैंडमली एक जवाब चुनें
             selected_answer = random.choice(data["answers"])
             return await message.reply(selected_answer)
 
@@ -74,11 +78,11 @@ Espro:
 
         final_answer = response.strip()
 
-        # ✅ Learn and save: 'answers' लिस्ट में नया जवाब $addToSet से जोड़ें
+        # ✅ Learn and save: नया जवाब 'answers' लिस्ट में $addToSet से जोड़ें
         if final_answer:
             chatdb.update_one(
                 {"question": user_input},
-                {"$addToSet": {"answers": final_answer}}, # $addToSet से सिर्फ नया जवाब जुड़ेगा
+                {"$addToSet": {"answers": final_answer}}, 
                 upsert=True
             )
             await message.reply(final_answer)
@@ -88,7 +92,9 @@ Espro:
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
 
-# ✅ /teach command (Updated to handle multiple answers)
+# --- Admin Commands ---
+
+# ✅ /teach command (Updates 'answers' list)
 @app.on_message(filters.command("teach") & filters.text)
 async def teach_command(client, message: Message):
     if message.from_user.id != OWNER_ID:
@@ -111,6 +117,56 @@ async def teach_command(client, message: Message):
         )
 
         await message.reply("✅ Bot ne naya jawab yaad kar liya!")
+
+    except Exception as e:
+        await message.reply("😓 Error:\n" + str(e))
+
+# ✅ /unlearn command (Deletes a specific question)
+@app.on_message(filters.command("unlearn") & filters.text)
+async def unlearn_command(client, message: Message):
+    if message.from_user.id != OWNER_ID:
+        return await message.reply("❌ Sirf bot owner hi /unlearn use kar sakta hai.")
+
+    try:
+        try:
+            question = message.text.split(" ", 1)[1]
+            question = question.strip().lower()
+        except IndexError:
+            return await message.reply("❌ Format:\n`/unlearn question`\nExample: `/unlearn hii`")
+
+        # MongoDB से सवाल को हटाएँ
+        result = chatdb.delete_one({"question": question})
+
+        if result.deleted_count > 0:
+            await message.reply(f"✅ Bot ne ye sawal aur uske saare jawab bhula diye:\n**{question}**")
+        else:
+            await message.reply(f"🤔 Ye sawal database mein mila hi nahi:\n**{question}**")
+
+    except Exception as e:
+        await message.reply("😓 Error:\n" + str(e))
+
+# ✅ /cleardb command (Deletes all learned data)
+@app.on_message(filters.command("cleardb"))
+async def clear_db_command(client, message: Message):
+    if message.from_user.id != OWNER_ID:
+        return await message.reply("❌ Sirf bot owner hi /cleardb use kar sakta hai.")
+    
+    # ⚠️ सुरक्षा जांच: पुष्टि (confirmation) के बिना डिलीट न करें
+    if len(message.command) < 2 or message.command[1].lower() != "confirm":
+        return await message.reply(
+            "⚠️ **Aakhri chetawani!** Aap saara data delete karne wale hain.\n"
+            "Agar aap sure hain, toh yeh type karein:\n"
+            "`/cleardb confirm`"
+        )
+
+    try:
+        # MongoDB से सारे डॉक्यूमेंट्स डिलीट करें
+        result = chatdb.delete_many({})
+        
+        await message.reply(
+            f"✅ **Safalta!** Bot ne saare sikhaye hue jawab bhula diye.\n"
+            f"Total **{result.deleted_count}** entries database se hata di gayi hain."
+        )
 
     except Exception as e:
         await message.reply("😓 Error:\n" + str(e))
