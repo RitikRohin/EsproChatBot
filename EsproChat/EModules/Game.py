@@ -258,7 +258,7 @@ async def balance_dikhao(client: Client, message: Message):
         quote=True
     )
 
----
+#---
 
 @app.on_message(filters.command("daily"))
 async def daily_reward(client: Client, message: Message):
@@ -299,7 +299,7 @@ async def daily_reward(client: Client, message: Message):
         quote=True
     )
 
----
+#---
 
 @app.on_message(filters.command("work"))
 async def work_attempt(client: Client, message: Message):
@@ -362,7 +362,7 @@ async def work_attempt(client: Client, message: Message):
             quote=True
         )
 
----
+#---
 
 @app.on_message(filters.command("kill"))
 async def kill_karo(client: Client, message: Message):
@@ -411,7 +411,7 @@ async def kill_karo(client: Client, message: Message):
         quote=True
     )
 
----
+#---
 
 @app.on_message(filters.command("rob"))
 async def rob_karo(client: Client, message: Message):
@@ -497,7 +497,7 @@ async def rob_karo(client: Client, message: Message):
             quote=True
         )
 
----
+#---
 
 @app.on_message(filters.command("give"))
 async def give_money(client: Client, message: Message):
@@ -554,7 +554,7 @@ async def give_money(client: Client, message: Message):
         quote=True
     )
 
----
+#---
 
 @app.on_message(filters.command("protect"))
 async def protect_karo(client: Client, message: Message):
@@ -581,7 +581,7 @@ async def protect_karo(client: Client, message: Message):
         quote=True
     )
 
----
+#---
 
 @app.on_message(filters.command("toprich"))
 async def toprich_list(client: Client, message: Message):
