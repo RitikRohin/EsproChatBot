@@ -73,20 +73,6 @@ async def update_user_status_or_cooldown(user_id: int, key: str, value):
 
 # --- Command Handlers ---
 
-@app.on_message(filters.command("start"))
-async def start_karo(client: Client, message: Message):
-    """Bot shuru karne par welcome message deta hai."""
-    user = message.from_user
-    username = user.username or user.first_name
-    user_data = await get_user_data(user.id, username)
-    
-    await message.reply_text(
-        f"**Namaste, {user.first_name}!** 👋\n"
-        f"Aapki game economy shuru ho gayi hai.\n\n"
-        f"💰 **Total Balance:** ${user_data['balance']}\n"
-        f"❤️ **Status:** {user_data['status'].capitalize()}",
-        quote=True
-    )
 
 @app.on_message(filters.command("bal"))
 async def balance_dikhao(client: Client, message: Message):
