@@ -4,159 +4,18 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import random
 import time
 import asyncio
-from config import MONGO_URL
-from EsproChat import app
-
-# --- MongoDB Setup ---
-MONGO_DB_NAME = "GameEconomyDB"
-STARTING_BALANCE = 500
-
-try:
-    mongo_client = AsyncIOMotorClient(MONGO_URL)
-    db = mongo_client[MONGO_DB_NAME]
-    users_collection = db["users"]
-    print("MongoDB connection successful.")
-except Exception as e:
-    print(f"MongoDB connection failed: {e}")
-    exit(1)
-
-# --- Database Functions (Async) ---
-
-async def get_user_data(user_id: int, username: str):
-    """User ka data fetch karta hai. Agar user nahi hai, toh use banata hai."""
-    
-    # User ko MongoDB se khojo
-    user_data = await users_collection.find_one({"_id": user_id})
-    
-    if user_data is None:
-        # Naya user document banao
-        new_user = {
-            "_id": user_id,
-            "username": username,
-            "balance": STARTING_BALANCE,
-            "status": "alive",
-            "protection_cooldown": 0,
-            "global_rank": 0 # Rank later calculate hoga
-        }
-        await users_collection.insert_one(new_user)
-        return new_user
-    
-    # Agar username update hua ho toh update karo
-    if user_data.get("username") != username:
-         await users_collection.update_one(
-            {"_id": user_id},
-            {"$set": {"username": username}}
-         )
-         user_data['username'] = username # Return ke liye update karo
-         
-    return user_data
-
-async def update_user_balance(user_id: int, amount: int):
-    """User ke balance ko update karta hai."""
-    
-    # $inc operator se balance ko increase/decrease karo
-    result = await users_collection.update_one(
-        {"_id": user_id},
-        {"$inc": {"balance": amount}}
-    )
-    
-    # Naya balance fetch karo
-    updated_data = await users_collection.find_one({"_id": user_id}, {"balance": 1})
-    return updated_data.get("balance")
-
-async def update_user_status_or_cooldown(user_id: int, key: str, value):
-    """User ka status ya protection cooldown update karta hai."""
-    await users_collection.update_one(
-        {"_id": user_id},
-        {"$set": {key: value}}
-    )
-
-# --- Command Handlers ---
-
-
-@app.on_message(filters.command("bal"))
-async def balance_dikhao(client: Client, message: Message):
-    """User ka ya reply kiye gaye user ka balance aur status dikhata hai."""
-    target_user = message.from_user
-    
-    if message.reply_to_message and message.reply_to_message.from_user:
-        target_user = message.reply_to_message.from_user
-        
-    username = target_user.username or target_user.first_name
-    user_data = await get_user_data(target_user.id, username)
-    
-    # Global Rank fetch karna (Toprich se calculate hoga, yahan sirf placeholder)
-    # MongoDB aggregation use hoti hai rank ke liye, jo complex hai.
-    # Abhi ke liye, ye rank hardcode hai ya 0. Real implementation mein aggregation lagegi.
-    # Example: rank = await users_collection.count_documents({"balance": {"$gt": user_data['balance']}}) + 1
-    rank = 16325 # Image se liya gaya example rank
-    
-    await message.reply_text(
-        f"👤 **Name:** {target_user.first_name}\n"
-        f"💰 **Total Balance:** ${user_data['balance']}\n"
-        f"🌍 **Global Rank:** {rank}\n"
-        f"❤️ **Status:** {user_data['status'].capitalize()}",
-        quote=True
-    )
-    
-@app.on_message(filters.command("kill"))
-async def kill_karo(client: Client, message: Message):
-    """Reply kiye gaye user ko 'dead' karta hai aur killer ko paisa milta hai."""
-    if not message.reply_to_message or not message.reply_to_message.from_user:
-        await message.reply_text("Kripya us user ke message par reply karein jise 'kill' karna hai.")
-        return
-
-    killer_user = message.from_user
-    target_user = message.reply_to_message.from_user
-    
-    if killer_user.id == target_user.id:
-        await message.reply_text("Self-kill allowed nahi hai! 😉")
-        return
-        
-    target_data = await get_user_data(target_user.id, target_user.first_name)
-    
-    if target_data['status'] == 'dead':
-        await message.reply_text(f"{target_user.first_name} toh pehle se hi 'dead' hai. 🧟")
-        return
-
-    # Kill successful: status change karo aur killer ko paisa do
-    earned_money = random.randint(150, 200) # Random kamai
-    
-    await update_user_status_or_cooldown(target_user.id, 'status', 'dead')
-    new_killer_balance = await update_user_balance(killer_user.id, earned_money)
-
-    await message.reply_text(
-        f"💀 **{killer_user.first_name}** ne **{target_user.first_name}** ko 'killed' kar diya!\n"
-        f"💵 **Earned:** **${earned_money}**\n"
-        f"Aapka naya balance: **${new_killer_balance}**",
-        quote=True
-    )
-
-@app.on_message(filters.command("rob"))
-async def rob_karo(client: Client, message: Message):
-    """Ek user se paisa chori karta hai (Robbery)."""
-    if not message.reply_to_message or not message.reply_to_message.from_user:
-        await message.reply_text("Kripya us user ke message par reply karein jise rob karna hai. Example: `/rob 50`")
-        return
-
-    robber_user = message.from_user
-from pyrogram import Client, filters
-from pyrogram.types import Message
-from motor.motor_asyncio import AsyncIOMotorClient
-import random
-import time
-import asyncio
 from typing import Dict, Any
 
 # --- CONFIG & SETUP (Importing from config.py) ---
 try:
+    # Ensure config.py is in the same directory and contains MONGO_URL, OWNER_ID
     from config import MONGO_URL, OWNER_ID
 except ImportError:
     print("FATAL ERROR: config.py file not found or MONGO_URL/OWNER_ID not defined inside it!")
     exit(1)
 
 # Placeholder: Replace with your actual app initialization if needed
-# from EsproChat import app
+from EsproChat import app
 app = Client(":memory:") 
 
 MONGO_DB_NAME = "GameEconomyDB"
@@ -170,7 +29,6 @@ try:
     print("MongoDB connection successful.")
 except Exception as e:
     print(f"MongoDB connection failed: {e}")
-    # exit(1) # Uncomment to stop the bot if DB connection fails
 
 # --- Utility Functions ---
 
@@ -191,15 +49,13 @@ async def get_user_data(user_id: int, username: str) -> Dict[str, Any]:
             "status": "alive",
             "protection_cooldown": 0,
             "global_rank": 0,
-            # New fields initialized
             "daily_claim_cooldown": 0, 
             "work_cooldown": 0 
         }
         await users_collection.insert_one(new_user)
         return new_user
     
-    # Ensure all required fields exist for old users
-    # This migration logic is important for smooth updates
+    # Migration/Default initialization for existing users
     if "daily_claim_cooldown" not in user_data:
         user_data["daily_claim_cooldown"] = 0
     if "work_cooldown" not in user_data:
@@ -224,6 +80,11 @@ async def update_user_balance(user_id: int, amount: int) -> int:
     )
     
     updated_data = await users_collection.find_one({"_id": user_id}, {"balance": 1})
+    
+    # Safety check for NoneType error
+    if updated_data is None:
+        return 0 
+        
     return updated_data.get("balance", 0)
 
 async def update_user_status_or_cooldown(user_id: int, key: str, value: Any):
@@ -268,6 +129,7 @@ async def daily_reward(client: Client, message: Message):
     DAILY_COOLDOWN = 86400  # 24 hours in seconds
     REWARD_AMOUNT = random.randint(700, 1200) 
     
+    # Ensure user exists before checking cooldowns
     user_data = await get_user_data(user_id, message.from_user.first_name)
     
     if user_data['status'] == 'dead':
@@ -308,6 +170,7 @@ async def work_attempt(client: Client, message: Message):
     current_time = int(time.time())
     WORK_COOLDOWN = 60 # 1 minute in seconds
     
+    # Ensure user exists before checking cooldowns
     user_data = await get_user_data(user_id, message.from_user.first_name)
     
     if user_data['status'] == 'dead':
@@ -374,21 +237,29 @@ async def kill_karo(client: Client, message: Message):
     killer_user = message.from_user
     target_user = message.reply_to_message.from_user
     
+    # Ensure killer_user exists in DB before updating balance
+    await get_user_data(killer_user.id, killer_user.first_name)
+    
     # --- PROTECTION CHECKS ---
+    
+    # 1. Bot Owner Protection (Custom Reply)
     if is_owner(target_user.id):
-        await message.reply_text("⛔ **Bot Owner** ko kill karne ki permission nahi hai. Security breach! 🚫", quote=True)
+        await message.reply_text("Nice try 👍", quote=True)
         return
         
+    # 2. Target is a Bot (Custom Reply)
+    if target_user.is_bot:
+        me = await client.get_me()
+        if target_user.id == me.id:
+             await message.reply_text("Mujhe mar ke kya ukhar loge 🤨", quote=True)
+        else:
+            # Other bots check
+            await message.reply_text("ham garib lo lutne nahi de sakte hai 🤝", quote=True)
+        return
+    
+    # 3. Self-Kill
     if killer_user.id == target_user.id:
         await message.reply_text("Self-kill allowed nahi hai! 😉", quote=True)
-        return
-
-    me = await client.get_me()
-    if target_user.id == me.id:
-        await message.reply_text("Mujhe mar ke kya ukhar loge 🤨", quote=True)
-        return
-    if target_user.is_bot:
-        await message.reply_text("Ham garib logo ko kill nahi karte hai 🤝", quote=True)
         return
     # -------------------------
         
@@ -403,7 +274,7 @@ async def kill_karo(client: Client, message: Message):
     
     await update_user_status_or_cooldown(target_user.id, 'status', 'dead')
     new_killer_balance = await update_user_balance(killer_user.id, earned_money)
-
+    
     await message.reply_text(
         f"💀 **{killer_user.first_name}** ne **{target_user.first_name}** ko 'killed' kar diya!\n"
         f"💵 **Earned:** **${earned_money}**\n"
@@ -423,15 +294,22 @@ async def rob_karo(client: Client, message: Message):
     robber_user = message.from_user
     target_user = message.reply_to_message.from_user
     
+    # Ensure robber_user exists in DB before checking balance
+    robber_data = await get_user_data(robber_user.id, robber_user.first_name)
+    
     # --- PROTECTION CHECKS ---
+    
+    # 1. Bot Owner Protection (Custom Reply)
     if is_owner(target_user.id):
-        await message.reply_text("Abe sale/sali tumko koi or nahi mila vo mera owner hai", quote=True)
+        await message.reply_text("Nice try 👍", quote=True)
         return
 
+    # 2. Target is a Bot (Custom Reply)
     if target_user.is_bot:
-        await message.reply_text("Bots se paisa nahi chori kar sakte. 🚫", quote=True)
+        await message.reply_text("ham garib lo lutne nahi de sakte hai 🤝", quote=True)
         return
     
+    # 3. Self-Rob
     if robber_user.id == target_user.id:
         await message.reply_text("Self-robbery se kya milega? Kuch nahi. 😆", quote=True)
         return
@@ -449,7 +327,6 @@ async def rob_karo(client: Client, message: Message):
         await message.reply_text("Robbery amount 0 se zyada honi chahiye.", quote=True)
         return
 
-    robber_data = await get_user_data(robber_user.id, robber_user.first_name)
     target_data = await get_user_data(target_user.id, target_user.first_name)
     
     MIN_BALANCE_FOR_ROB = 100
@@ -510,6 +387,10 @@ async def give_money(client: Client, message: Message):
     sender_user = message.from_user
     receiver_user = message.reply_to_message.from_user
     
+    # Ensure sender_user and receiver_user documents exist
+    sender_data = await get_user_data(sender_user.id, sender_user.first_name)
+    await get_user_data(receiver_user.id, receiver_user.first_name)
+    
     # Amount parse karo
     try:
         amount_str = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else "0"
@@ -531,10 +412,6 @@ async def give_money(client: Client, message: Message):
         await message.reply_text("Aap bots ko paisa nahi de sakte. 🤖", quote=True)
         return
         
-    # Fetch Data (Ensure both users exist)
-    sender_data = await get_user_data(sender_user.id, sender_user.first_name)
-    await get_user_data(receiver_user.id, receiver_user.first_name)
-    
     # Sender Balance Check
     if sender_data['balance'] < amount:
         await message.reply_text(
@@ -563,6 +440,7 @@ async def protect_karo(client: Client, message: Message):
     protection_duration = 3600 # 1 ghanta
     current_time = int(time.time())
     
+    # Ensure user exists before fetching data
     user_data = await get_user_data(user_id, message.from_user.first_name)
     
     if user_data['protection_cooldown'] > current_time:
@@ -613,4 +491,4 @@ async def toprich_list(client: Client, message: Message):
 # Bot shuru karo
 if __name__ == "__main__":
     print("Bot shuru ho raha hai... (Bot is starting with MongoDB)")
-    # app.run() # Uncomment this line to start your actual Pyrogram client
+    # app.run() 
