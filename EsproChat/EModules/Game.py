@@ -16,7 +16,7 @@ except ImportError:
 
 # Placeholder: Replace with your actual app initialization if needed
 from EsproChat import app
-app = Client(":memory:") 
+
 
 MONGO_DB_NAME = "GameEconomyDB"
 STARTING_BALANCE = 500
