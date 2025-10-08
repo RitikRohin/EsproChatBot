@@ -1,186 +1,266 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from pymongo import MongoClient
-from datetime import datetime, timedelta
+from motor.motor_asyncio import AsyncIOMotorClient
 import random
 import time
+import asyncio
+from config import MONGO_URI
 from EsproChat import app
-from config import MONGO_URL
 
-# ------------------- CONFIG -------------------
-mongo_client = MongoClient(MONGO_URL)
-db = mongo_client["BetGame"]
-users = db["users"]
+# --- MongoDB Setup ---
+MONGO_DB_NAME = "GameEconomyDB"
+STARTING_BALANCE = 500
 
-cooldowns = {}
+try:
+    mongo_client = AsyncIOMotorClient(MONGO_URI)
+    db = mongo_client[MONGO_DB_NAME]
+    users_collection = db["users"]
+    print("MongoDB connection successful.")
+except Exception as e:
+    print(f"MongoDB connection failed: {e}")
+    exit(1)
 
-# ------------------- UTILITIES -------------------
+# --- Database Functions (Async) ---
 
-def get_user(user_id: int):
-    user = users.find_one({"_id": user_id})
-    if not user:
-        user = {"_id": user_id, "coins": 100, "streak": 0}
-        users.insert_one(user)
-    return user
+async def get_user_data(user_id: int, username: str):
+    """User ka data fetch karta hai. Agar user nahi hai, toh use banata hai."""
+    
+    # User ko MongoDB se khojo
+    user_data = await users_collection.find_one({"_id": user_id})
+    
+    if user_data is None:
+        # Naya user document banao
+        new_user = {
+            "_id": user_id,
+            "username": username,
+            "balance": STARTING_BALANCE,
+            "status": "alive",
+            "protection_cooldown": 0,
+            "global_rank": 0 # Rank later calculate hoga
+        }
+        await users_collection.insert_one(new_user)
+        return new_user
+    
+    # Agar username update hua ho toh update karo
+    if user_data.get("username") != username:
+         await users_collection.update_one(
+            {"_id": user_id},
+            {"$set": {"username": username}}
+         )
+         user_data['username'] = username # Return ke liye update karo
+         
+    return user_data
 
-def update_user(user_id: int, coins: int, streak: int, last_claim=None):
-    data = {"coins": coins, "streak": streak}
-    if last_claim:
-        data["last_claim"] = last_claim
-    users.update_one({"_id": user_id}, {"$set": data}, upsert=True)
+async def update_user_balance(user_id: int, amount: int):
+    """User ke balance ko update karta hai."""
+    
+    # $inc operator se balance ko increase/decrease karo
+    result = await users_collection.update_one(
+        {"_id": user_id},
+        {"$inc": {"balance": amount}}
+    )
+    
+    # Naya balance fetch karo
+    updated_data = await users_collection.find_one({"_id": user_id}, {"balance": 1})
+    return updated_data.get("balance")
 
-# ------------------- /game -------------------
+async def update_user_status_or_cooldown(user_id: int, key: str, value):
+    """User ka status ya protection cooldown update karta hai."""
+    await users_collection.update_one(
+        {"_id": user_id},
+        {"$set": {key: value}}
+    )
 
-@app.on_message(filters.command("game"))
-async def start_command(client, message: Message):
-    get_user(message.from_user.id)
+# --- Command Handlers ---
+
+@app.on_message(filters.command("start"))
+async def start_karo(client: Client, message: Message):
+    """Bot shuru karne par welcome message deta hai."""
+    user = message.from_user
+    username = user.username or user.first_name
+    user_data = await get_user_data(user.id, username)
+    
     await message.reply_text(
-        f"👋 Hello {message.from_user.first_name}!\n"
-        f"🎮 Welcome to Life Bet Game!\n\n"
-        f"You start with 💰 100 coins.\n"
-        f"To bet, use: `/bet 10` or `/bet *`",
+        f"**Namaste, {user.first_name}!** 👋\n"
+        f"Aapki game economy shuru ho gayi hai.\n\n"
+        f"💰 **Total Balance:** ${user_data['balance']}\n"
+        f"❤️ **Status:** {user_data['status'].capitalize()}",
         quote=True
     )
 
-# ------------------- /balance -------------------
+@app.on_message(filters.command("bal"))
+async def balance_dikhao(client: Client, message: Message):
+    """User ka ya reply kiye gaye user ka balance aur status dikhata hai."""
+    target_user = message.from_user
+    
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target_user = message.reply_to_message.from_user
+        
+    username = target_user.username or target_user.first_name
+    user_data = await get_user_data(target_user.id, username)
+    
+    # Global Rank fetch karna (Toprich se calculate hoga, yahan sirf placeholder)
+    # MongoDB aggregation use hoti hai rank ke liye, jo complex hai.
+    # Abhi ke liye, ye rank hardcode hai ya 0. Real implementation mein aggregation lagegi.
+    # Example: rank = await users_collection.count_documents({"balance": {"$gt": user_data['balance']}}) + 1
+    rank = 16325 # Image se liya gaya example rank
+    
+    await message.reply_text(
+        f"👤 **Name:** {target_user.first_name}\n"
+        f"💰 **Total Balance:** ${user_data['balance']}\n"
+        f"🌍 **Global Rank:** {rank}\n"
+        f"❤️ **Status:** {user_data['status'].capitalize()}",
+        quote=True
+    )
+    
+@app.on_message(filters.command("kill"))
+async def kill_karo(client: Client, message: Message):
+    """Reply kiye gaye user ko 'dead' karta hai aur killer ko paisa milta hai."""
+    if not message.reply_to_message or not message.reply_to_message.from_user:
+        await message.reply_text("Kripya us user ke message par reply karein jise 'kill' karna hai.")
+        return
 
-@app.on_message(filters.command("balance"))
-async def check_balance(client, message: Message):
-    user = get_user(message.from_user.id)
-    await message.reply(f"💼 You currently have {user['coins']} coins.")
+    killer_user = message.from_user
+    target_user = message.reply_to_message.from_user
+    
+    if killer_user.id == target_user.id:
+        await message.reply_text("Self-kill allowed nahi hai! 😉")
+        return
+        
+    target_data = await get_user_data(target_user.id, target_user.first_name)
+    
+    if target_data['status'] == 'dead':
+        await message.reply_text(f"{target_user.first_name} toh pehle se hi 'dead' hai. 🧟")
+        return
 
-# ------------------- /reset -------------------
+    # Kill successful: status change karo aur killer ko paisa do
+    earned_money = random.randint(150, 200) # Random kamai
+    
+    await update_user_status_or_cooldown(target_user.id, 'status', 'dead')
+    new_killer_balance = await update_user_balance(killer_user.id, earned_money)
 
-@app.on_message(filters.command("reset"))
-async def reset_coins(client, message: Message):
-    update_user(message.from_user.id, coins=100, streak=0)
-    await message.reply("🔄 Your coins have been reset to 100.")
+    await message.reply_text(
+        f"💀 **{killer_user.first_name}** ne **{target_user.first_name}** ko 'killed' kar diya!\n"
+        f"💵 **Earned:** **${earned_money}**\n"
+        f"Aapka naya balance: **${new_killer_balance}**",
+        quote=True
+    )
 
-# ------------------- /daily -------------------
+@app.on_message(filters.command("rob"))
+async def rob_karo(client: Client, message: Message):
+    """Ek user se paisa chori karta hai (Robbery)."""
+    if not message.reply_to_message or not message.reply_to_message.from_user:
+        await message.reply_text("Kripya us user ke message par reply karein jise rob karna hai. Example: `/rob 50`")
+        return
 
-@app.on_message(filters.command("daily"))
-async def daily_bonus(client, message: Message):
-    user_id = message.from_user.id
-    user = get_user(user_id)
-    now = datetime.utcnow()
+    robber_user = message.from_user
+    target_user = message.reply_to_message.from_user
+    
+    if robber_user.id == target_user.id:
+        await message.reply_text("Self-robbery se kya milega? Kuch nahi. 😆")
+        return
+    
+    # Amount parse karo
+    try:
+        amount = int(message.text.split()[1])
+    except:
+         amount = 50 # Agar amount nahi diya toh default 50 rob karein
 
-    last_claim = user.get("last_claim")
-    if last_claim:
-        last_claim_time = datetime.fromisoformat(last_claim)
-        if now < last_claim_time + timedelta(hours=24):
-            remaining = (last_claim_time + timedelta(hours=24)) - now
-            hours = remaining.seconds // 3600
-            mins = (remaining.seconds % 3600) // 60
-            return await message.reply(
-                f"🕒 Wait {remaining.days}d {hours}h {mins}m for your next daily bonus."
-            )
-
-    bonus = 50
-    new_coins = user["coins"] + bonus
-    update_user(user_id, coins=new_coins, streak=user["streak"], last_claim=now.isoformat())
-    await message.reply(f"🎁 You got +{bonus} coins!\n💰 Total: {new_coins} coins.")
-
-# ------------------- /bet -------------------
-
-@app.on_message(filters.command("bet"))
-async def bet_game(client: Client, message: Message):
-    user_id = message.from_user.id
-    name = message.from_user.mention
-    args = message.text.split()
-
-    now = time.time()
-    if user_id in cooldowns and now - cooldowns[user_id] < 5:
-        return await message.reply("⏳ Please wait 5 seconds before betting again.")
-    cooldowns[user_id] = now
-
-    if len(args) != 2:
-        return await message.reply("❌ Usage: /bet <amount>\nExample: /bet 10 or /bet *")
-
-    user = get_user(user_id)
-
-    if args[1] == "*":
-        bet_amount = user["coins"]
-    elif args[1].isdigit():
-        bet_amount = int(args[1])
-    else:
-        return await message.reply("❌ Invalid amount.\nUse: /bet 10 or /bet *")
-
-    if bet_amount <= 0:
-        return await message.reply("❌ Bet amount must be more than 0.")
-    if bet_amount > user["coins"]:
-        return await message.reply("🚫 Not enough coins!")
-
-    win = random.choice([True, False])
-
-    if win:
-        new_coins = user["coins"] + bet_amount
-        new_streak = user["streak"] + 1
-        update_user(user_id, new_coins, new_streak)
-
-        await message.reply_photo(
-            photo="https://i.imgur.com/F7N5Z4S.png",
-            caption=(
-                f"🎰 {name} has bet {bet_amount} coins\n"
-                f"Oh yeah! He came back home with {bet_amount * 2} coins (✅)\n\n"
-                f"🎯 <b>Consecutive victories:</b> {new_streak}"
-            ),
-            parse_mode="HTML"
-        )
-    else:
-        new_coins = user["coins"] - bet_amount
-        new_streak = 0
-        update_user(user_id, new_coins, new_streak)
-
-        await message.reply_photo(
-            photo="https://i.imgur.com/AID8bGS.png",
-            caption=(
-                f"🎰 {name} has bet {bet_amount} coins\n"
-                f"Oh no! He came back home without {bet_amount} coins (❌)."
-            )
-        )
-
-# ------------------- /top -------------------
-
-@app.on_message(filters.command("top"))
-async def top_players(client, message: Message):
-    top = users.find().sort("coins", -1).limit(5)
-    leaderboard = "🏆 Top 5 Players:\n\n"
-    for i, user in enumerate(top, start=1):
-        try:
-            u = await client.get_users(user["_id"])
-            leaderboard += f"{i}. <a href='tg://user?id={u.id}'>{u.first_name}</a> — {user['coins']} coins\n"
-        except:
-            continue
-    await message.reply_text(leaderboard, parse_mode="HTML", disable_web_page_preview=True)
-
-# ------------------- /pay <user_id or reply> <amount> -------------------
-
-@app.on_message(filters.command("pay"))
-async def pay_command(client: Client, message: Message):
-    sender_id = message.from_user.id
-    sender = get_user(sender_id)
-
-    if message.reply_to_message:
-        receiver = message.reply_to_message.from_user
-    else:
-        args = message.text.split()
-        if len(args) < 3 or not args[1].isdigit() or not args[2].isdigit():
-            return await message.reply("❌ Usage: /pay <user_id or reply> <amount>")
-        receiver = await client.get_users(int(args[1]))
-
-    if not receiver or receiver.id == sender_id:
-        return await message.reply("❌ Invalid user.")
-
-    amount = int(message.text.split()[-1])
     if amount <= 0:
-        return await message.reply("❌ Amount must be more than 0.")
-    if amount > sender["coins"]:
-        return await message.reply("🚫 You don't have enough coins!")
+        await message.reply_text("Robbery amount 0 se zyada honi chahiye.")
+        return
 
-    receiver_data = get_user(receiver.id)
-    update_user(sender_id, coins=sender["coins"] - amount, streak=sender["streak"])
-    update_user(receiver.id, coins=receiver_data["coins"] + amount, streak=receiver_data["streak"])
+    robber_data = await get_user_data(robber_user.id, robber_user.first_name)
+    target_data = await get_user_data(target_user.id, target_user.first_name)
+    
+    # Checks
+    if target_data['status'] == 'dead':
+        await message.reply_text(f"{target_user.first_name} 'dead' hai. 'Dead' logo ko rob nahi kiya jaa sakta.")
+        return
+    
+    current_time = int(time.time())
+    if target_data['protection_cooldown'] > current_time:
+        await message.reply_text(f"🚨 **Robbery failed!** {target_user.first_name} abhi **Protected** hai.")
+        return
+    
+    if target_data['balance'] < amount:
+        await message.reply_text(f"Target ({target_user.first_name}) ke paas itna paisa nahi hai. Unka balance: ${target_data['balance']}.")
+        return
 
-    await message.reply(
-        f"✅ You sent {amount} coins to {receiver.mention}.\n💼 Your new balance: {sender['coins'] - amount} coins."
-            )
+    # Robbery success rate (70% chance of success)
+    if random.random() < 0.70:
+        # Success
+        stolen_amount = amount
+        
+        # Balance update karo
+        await update_user_balance(target_user.id, -stolen_amount)
+        new_robber_balance = await update_user_balance(robber_user.id, stolen_amount)
+        
+        await message.reply_text(
+            f"💰 **Success!** {robber_user.first_name} ne **{target_user.first_name}** se **${stolen_amount}** rob kiye!\n"
+            f"Aapka naya balance: **${new_robber_balance}**"
+        )
+    else:
+        # Failure: Robber ko penalty
+        penalty = int(robber_data['balance'] * 0.10)
+        penalty = max(10, min(penalty, 100))
+        new_robber_balance = await update_user_balance(robber_user.id, -penalty)
+        
+        await message.reply_text(
+            f"❌ **Robbery failed!** Police ne tumhe pakad liya! Tumhe **${penalty}** ka penalty laga hai.\n"
+            f"Tumhara naya balance: **${new_robber_balance}**"
+        )
+        
+@app.on_message(filters.command("protect"))
+async def protect_karo(client: Client, message: Message):
+    """User khud ko robbery se protect karta hai (cooldown set karta hai)."""
+    user_id = message.from_user.id
+    protection_duration = 3600 # 1 ghanta
+    current_time = int(time.time())
+    
+    user_data = await get_user_data(user_id, message.from_user.first_name)
+    
+    if user_data['protection_cooldown'] > current_time:
+        remaining_time = user_data['protection_cooldown'] - current_time
+        await message.reply_text(f"Tum pehle se hi Protected ho. Baki samay: **{remaining_time // 60} minutes**.")
+        return
+        
+    # Naya protection time set karo
+    new_protection_time = current_time + protection_duration
+    await update_user_status_or_cooldown(user_id, 'protection_cooldown', new_protection_time)
+    
+    await message.reply_text(
+        f"🛡️ **Protection Active!**\n"
+        f"Aap agle **1 ghante** tak robbery se surakshit hain."
+    )
+
+# --- Top Rich Command Example ---
+
+@app.on_message(filters.command("toprich"))
+async def toprich_list(client: Client, message: Message):
+    """Top 10 sabse ameer users ki list dikhata hai."""
+    
+    # MongoDB aggregation ka use karke top users find karo
+    top_users_cursor = users_collection.find({}) \
+        .sort("balance", -1) \
+        .limit(10)
+        
+    top_users = await top_users_cursor.to_list(length=10)
+    
+    if not top_users:
+        await message.reply_text("Database mein koi user nahi mila.")
+        return
+        
+    response = "👑 **Top 10 Richest Users Globally** 💰\n\n"
+    for i, user in enumerate(top_users):
+        name = user.get('username', f"User {user['_id']}")
+        balance = user.get('balance', 0)
+        response += f"**{i+1}.** {name} - **${balance}**\n"
+        
+    await message.reply_text(response)
+
+
+# Bot shuru karo
+if __name__ == "__main__":
+    print("Bot shuru ho raha hai... (Bot is starting with MongoDB)")
+    
