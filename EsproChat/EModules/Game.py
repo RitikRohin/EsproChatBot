@@ -4,7 +4,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import random
 import time
 import asyncio
-from config import MONGO_URI
+from config import MONGO_URL
 from EsproChat import app
 
 # --- MongoDB Setup ---
