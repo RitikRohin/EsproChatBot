@@ -12,7 +12,7 @@ MONGO_DB_NAME = "GameEconomyDB"
 STARTING_BALANCE = 500
 
 try:
-    mongo_client = AsyncIOMotorClient(MONGO_URI)
+    mongo_client = AsyncIOMotorClient(MONGO_URL)
     db = mongo_client[MONGO_DB_NAME]
     users_collection = db["users"]
     print("MongoDB connection successful.")
