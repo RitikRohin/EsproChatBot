@@ -7,12 +7,11 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageChops
 from logging import getLogger
-import os # os import is needed for creating directories
+import os 
 
 LOGGER = getLogger(__name__)
 
 # --- Directory Setup (Ensure 'downloads' directory exists) ---
-# FIX: Agar 'downloads' folder nahi hai, toh use banao
 DOWNLOADS_DIR = 'downloads'
 if not os.path.isdir(DOWNLOADS_DIR):
     try:
@@ -20,7 +19,6 @@ if not os.path.isdir(DOWNLOADS_DIR):
     except Exception as e:
         LOGGER.error(f"Failed to create downloads directory: {e}")
         
-# NOTE: Ensure 'EsproChat/assets/' directory and 'upic.png' also exist.
 # -------------------------------------------------------------
 
 # --- Temporary Storage (Used only for deleting the previous welcome message) ---
@@ -59,6 +57,7 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     # Deep Indigo/Purple Color
     background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
     
+    # 💥 NOTE: Image.open() will fail if the file is missing (e.g., upic.png)
     pfp = Image.open(pic).convert("RGBA")
     pfp = circle(pfp, brightness_factor=brightness_factor) 
     
@@ -87,18 +86,7 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     background.save(file_path) 
     return file_path
 
-def gen_thumb(image_path, uid):
-    """Generates a 320x320 thumbnail from the welcome image."""
-    try:
-        img = Image.open(image_path)
-        img.thumbnail((320, 320)) 
-        
-        thumb_path = f"{DOWNLOADS_DIR}/thumb_{uid}.png" 
-        img.save(thumb_path) 
-        return thumb_path
-    except Exception as e:
-        LOGGER.error(f"Error generating thumbnail: {e}")
-        return None
+# ❌ REMOVED: gen_thumb function is no longer needed
 
 # --- Handler (Automatic Welcome) ---
 
@@ -106,9 +94,10 @@ def gen_thumb(image_path, uid):
 async def greet_new_member(_, member: ChatMemberUpdated):
     """
     Automatically sends a welcome message when a new member joins.
+    Thumbnail generation and passing 'thumb' keyword argument are removed.
     """
     welcomeimg = None
-    thumb_path = None
+    # thumb_path is removed
     
     chat_id = member.chat.id
     
@@ -125,7 +114,6 @@ async def greet_new_member(_, member: ChatMemberUpdated):
     
     # Download PFP
     try:
-        # File name template
         pic_filename = f"pp{user_id}" 
         pic = await app.download_media(
             user.photo.big_file_id, file_name=pic_filename
@@ -148,13 +136,12 @@ async def greet_new_member(_, member: ChatMemberUpdated):
             pic, user.first_name, chat_title, user_id, user.username
         )
         
-        # 2. Generate thumbnail
-        thumb_path = gen_thumb(welcomeimg, user_id)
+        # ❌ REMOVED: No thumbnail generation
         
         # Define link
         add_link = f"https://t.me/{app.username}?startgroup=true"
         
-        # Send photo with THUMBNAIL
+        # Send photo (without 'thumb' argument, Pyrogram will generate it automatically)
         msg = await app.send_photo(
             member.chat.id,
             photo=welcomeimg,
@@ -170,7 +157,7 @@ async def greet_new_member(_, member: ChatMemberUpdated):
 
 **━━━━━━━━━━━━━━━━━━━━**
 """,
-            thumb=thumb_path,
+            # ❌ REMOVED: thumb=thumb_path,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(text="⚔️ ᴋɪᴅɴᴀᴘ ᴛʜɪs ʙᴏᴛ ⚔️", url=add_link)],
             ])
