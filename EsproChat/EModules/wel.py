@@ -1,6 +1,5 @@
 import asyncio
-from pyrogram import Client, filters
-from pyrogram.enums import ParseMode
+from pyrogram import filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import pytz
 from datetime import datetime
@@ -9,42 +8,48 @@ from EsproChat import app
 # Timezone
 IST = pytz.timezone("Asia/Kolkata")
 
-# Format Time
 def get_time():
-    now = datetime.now(IST)
-    return now.strftime("%I:%M %p")
+    return datetime.now(IST).strftime("%I:%M %p")
 
-# Format Date
 def get_date():
-    now = datetime.now(IST)
-    return now.strftime("%d/%m/%Y")
+    return datetime.now(IST).strftime("%d/%m/%Y")
 
-# Temp store image
+# Temp store group image & last message
 temp_img = {}
+last_welcome = {}
 
-# Save image
-@app.on_message(filters.group & filters.media)
+
+# Save latest image in group
+@app.on_message(filters.group & filters.photo)
 async def save_temp_image(_, message):
-    if message.chat.id not in temp_img:
-        temp_img[message.chat.id] = await message.download()
+    temp_img[message.chat.id] = await message.download()
 
-# Welcome System
+
+# Welcome message
 @app.on_message(filters.new_chat_members)
 async def welcome_msg(_, message):
-    chat = message.chat
-    user = message.from_user
 
-    # Prepare Variables
+    chat = message.chat
+    user = message.new_chat_members[0]  # TRUE NEW MEMBER
+
+    # Delete old welcome
+    if chat.id in last_welcome:
+        try:
+            await last_welcome[chat.id].delete()
+        except:
+            pass
+
     title = chat.title
     mention = user.mention
     user_id = user.id
     username = f"@{user.username}" if user.username else "N/A"
+
     time_now = get_time()
     date_now = get_date()
 
     # Welcome Text
     text = f"""
-<b>┏━───〔👋 𝙉𝙚𝙬 𝙈𝙚𝙢𝙗𝙚𝙧 𝙅𝙤𝙞𝙣𝙚𝙙 〕───━┓</b>
+<b>┏━───〔👋 NEW MEMBER JOINED 〕───━┓</b>
 
 <b>🥀 Name :</b> {mention}
 <b>🆔 ID :</b> <code>{user_id}</code>
@@ -59,20 +64,26 @@ async def welcome_msg(_, message):
 <b>┗━──────────────━┛</b>
 """
 
-    # Correct Buttons
+    # Buttons
     buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💓 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 💓", callback_data="welcome_btn")]
+        [InlineKeyboardButton("💓 WELCOME 💓", url=f"tg://user?id={user.id}")]
     ])
 
-    # Send Welcome With Image Or Simple Message
+    # Send with image (if available)
     if chat.id in temp_img:
-        await message.reply_photo(
+        msg = await app.send_photo(
+            chat_id=chat.id,
             photo=temp_img[chat.id],
             caption=text,
             reply_markup=buttons
         )
+
     else:
-        await message.reply_text(
-            text,
+        msg = await app.send_message(
+            chat_id=chat.id,
+            text=text,
             reply_markup=buttons
         )
+
+    # Save last welcome message for auto delete
+    last_welcome[chat.id] = msg
