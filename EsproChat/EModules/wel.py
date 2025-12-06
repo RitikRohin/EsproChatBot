@@ -4,7 +4,7 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import pytz
 from datetime import datetime
-from EsproMusic import app
+from EsproChat import app
 
 # Timezone
 IST = pytz.timezone("Asia/Kolkata")
