@@ -84,8 +84,8 @@ def welcomepic(pic, username_str, chatname, id_int, total_count_str, brightness_
     
     # Define Fonts (Ensure these fonts are available)
     try:
-        title_font = ImageFont.truetype("arial.ttf", 40) 
-        content_font = ImageFont.truetype("arial.ttf", 30)
+        title_font = ImageFont.truetype("arial.ttf", 70) 
+        content_font = ImageFont.truetype("arial.ttf", 60)
     except IOError:
         title_font = ImageFont.load_default()
         content_font = ImageFont.load_default()
