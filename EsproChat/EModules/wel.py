@@ -7,7 +7,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageChops
 from logging import getLogger
-# import os # os import removed
+# import os # File cleanup is removed as requested
 
 LOGGER = getLogger(__name__)
 
@@ -40,18 +40,34 @@ def circle(pfp, size=(500, 500), brightness_factor=1.3):
 
 def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     """
-    Generates the welcome image using the custom background.
+    Generates the welcome image dynamically with a solid color background.
     """
-    # NOTE: Assumes the file is named wel_new.png in the assets folder
-    background = Image.open("EsproChat/assets/wel_new.png") 
+    # 💥 CHANGE: Dynamically creating a deep indigo background (1280x720)
+    BG_WIDTH, BG_HEIGHT = 1280, 720
+    # Deep Indigo/Purple Color
+    background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
+    
     pfp = Image.open(pic).convert("RGBA")
     pfp = circle(pfp, brightness_factor=brightness_factor) 
     
-    pfp = pfp.resize((380, 380)) 
+    # PFP size and position adjusted for the simple center (e.g., center of 1280x720)
+    PFP_SIZE = 380
+    pfp = pfp.resize((PFP_SIZE, PFP_SIZE)) 
+    
+    # Calculating the center position for PFP: (BG_WIDTH/2 - PFP_SIZE/2, BG_HEIGHT/2 - PFP_SIZE/2)
+    PFP_X = (BG_WIDTH // 2) - (PFP_SIZE // 2) 
+    PFP_Y = (BG_HEIGHT // 2) - (PFP_SIZE // 2)
+    pfp_position = (PFP_X, PFP_Y) # Should be around (450, 170)
     
     draw = ImageDraw.Draw(background)
 
-    pfp_position = (490, 260) 
+    # Drawing a simple white border circle around the PFP
+    BORDER_SIZE = PFP_SIZE + 20
+    BORDER_X = (BG_WIDTH // 2) - (BORDER_SIZE // 2)
+    BORDER_Y = (BG_HEIGHT // 2) - (BORDER_SIZE // 2)
+    draw.ellipse((BORDER_X, BORDER_Y, BORDER_X + BORDER_SIZE, BORDER_Y + BORDER_SIZE), 
+                 outline='white', width=5)
+    
     background.paste(pfp, pfp_position, pfp)
     
     # Saving file with .png extension
@@ -63,7 +79,6 @@ def gen_thumb(image_path, uid):
     """Generates a 320x320 thumbnail from the welcome image."""
     try:
         img = Image.open(image_path)
-        # Resizing to fit Telegram's standard thumbnail size
         img.thumbnail((320, 320)) 
         
         # Saving file with .png extension
@@ -104,6 +119,8 @@ async def greet_new_member(_, member: ChatMemberUpdated):
             user.photo.big_file_id, file_name=pic_filename
         )
     except AttributeError:
+        # NOTE: Default PFP (upic.png) must still be available locally, 
+        # or you can replace this with another dynamically generated image.
         pic = "EsproChat/assets/upic.png"
         
     # Delete last welcome message for cleanup
@@ -154,10 +171,4 @@ async def greet_new_member(_, member: ChatMemberUpdated):
     except Exception as e:
         LOGGER.error(f"Error sending welcome message: {e}")
         
-    # finally: # Removed 'finally' block and file cleanup logic
-    #     if welcomeimg and os.path.exists(welcomeimg):
-    #         os.remove(welcomeimg)
-    #     if thumb_path and os.path.exists(thumb_path):
-    #         os.remove(thumb_path)
-    #     if pic != "EsproChat/assets/upic.png" and os.path.exists(pic):
-    #          os.remove(pic)
+    # File cleanup logic is intentionally removed.
