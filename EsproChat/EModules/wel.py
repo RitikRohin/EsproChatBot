@@ -48,13 +48,14 @@ def circle(pfp, size=(500, 500), brightness_factor=1.3):
     pfp.putalpha(mask)
     return pfp
 
-def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
+# 🔄 CHANGE 1: Function signature changed. 'user' is now 'username_str' 
+# and 'uname' is now 'total_count_str'.
+def welcomepic(pic, username_str, chatname, id_int, total_count_str, brightness_factor=1.3):
     """
     Generates the welcome image dynamically with a solid color background 
     and adds text overlay to the right side.
     """
     BG_WIDTH, BG_HEIGHT = 1280, 720
-    # Deep Indigo/Purple Color
     background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
     
     pfp = Image.open(pic).convert("RGBA")
@@ -79,30 +80,26 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     
     background.paste(pfp, pfp_position, pfp)
     
-    # 💥 NEW: Text Overlay Logic (Right Side) 💥
+    # Text Overlay Logic (Right Side) 
     
-    # 1. Define Fonts (Ensure these fonts are available on your system/hosting)
+    # Define Fonts (Ensure these fonts are available)
     try:
-        # Use a common font or adjust path if necessary
         title_font = ImageFont.truetype("arial.ttf", 40) 
         content_font = ImageFont.truetype("arial.ttf", 30)
     except IOError:
-        # Fallback to default font if the specific font is not found
         title_font = ImageFont.load_default()
         content_font = ImageFont.load_default()
 
     TEXT_COLOR = 'white'
     
-    # Starting X position for text (Right side, starting 700 pixels from left)
     START_X = 650 
-    # Starting Y position (Top of the frame)
     START_Y = 200 
     LINE_HEIGHT = 70
     
     # Data to display
-    username = user.first_name or "New Member"
-    member_id = str(id)
-    # Total member count will be passed later, using a placeholder for now
+    username = username_str or "New Member"
+    member_id = str(id_int)
+    total_count = total_count_str
     
     # Line 1: Welcome Message / User Name
     draw.text((START_X, START_Y), 
@@ -116,27 +113,19 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
               fill=TEXT_COLOR, 
               font=content_font)
               
-    # Line 3: Total Members (Placeholder for total count)
-    # The actual count is calculated in the handler and passed via the 'id' field in this function, 
-    # but since chat_title is passed, let's assume we can also pass the count (for simplicity, we use the placeholder {chatname} for now)
-    # NOTE: The actual count (count) is available in the handler, not directly passed here. 
-    # We need to change the function signature if we want the actual count here.
-    # For now, I will use a placeholder or assume 'uname' is used for count if the function signature cannot change.
-    
-    # To fix this, I am changing the function call in the handler to pass the count. 
-    # But for THIS function definition, I will use the 'uname' argument as the count placeholder.
+    # Line 3: Total Members
     draw.text((START_X, START_Y + 3 * LINE_HEIGHT), 
-              f"👥 Total Members: {uname}", 
+              f"👥 Total Members: {total_count}", 
               fill=TEXT_COLOR, 
               font=content_font)
 
 
     # Saving file
-    file_path = f"{DOWNLOADS_DIR}/welcome#{id}.png" 
+    file_path = f"{DOWNLOADS_DIR}/welcome#{id_int}.png" 
     background.save(file_path) 
     return file_path
 
-# ❌ gen_thumb function is removed as it doesn't need changes.
+# ❌ gen_thumb function is defined in the handler for simplicity (from previous version)
 
 # --- Handler (Automatic Welcome) ---
 
@@ -158,8 +147,12 @@ async def greet_new_member(_, member: ChatMemberUpdated):
     user = member.new_chat_member.user
     user_id = user.id
     chat_title = member.chat.title
-    count = await app.get_chat_members_count(chat_id)
     
+    try:
+        count = await app.get_chat_members_count(chat_id)
+    except Exception:
+        count = 0
+
     # Download PFP
     try:
         pic_filename = f"pp{user_id}" 
@@ -167,7 +160,6 @@ async def greet_new_member(_, member: ChatMemberUpdated):
             user.photo.big_file_id, file_name=pic_filename
         )
     except AttributeError:
-        # Default PFP path (Ensure this file 'upic.png' exists in assets)
         pic = "EsproChat/assets/upic.png"
         
     # Delete last welcome message for cleanup
@@ -179,18 +171,13 @@ async def greet_new_member(_, member: ChatMemberUpdated):
             LOGGER.error(f"Error deleting old welcome message: {e}")
 
     try:
-        # 1. Generate main image: Passing 'count' as the last argument (was 'uname')
+        # 1. Generate main image 
+        # 🔄 CHANGE 2: Calling welcomepic with string arguments (First Name, Count)
         welcomeimg = welcomepic(
-            pic, user.first_name, chat_title, user_id, str(count) # Passing count as the last argument
+            pic, user.first_name, chat_title, user_id, str(count)
         )
         
-        # 2. Generate thumbnail (Pyrogram will use this for auto-thumb)
-        # Note: gen_thumb function needs to be defined if this is used, 
-        # but since Pyrogram auto-generates thumb now, we can skip it, 
-        # but based on the previous code, I'll keep the call but remove the function definition.
-        # However, to be complete based on the last working code, I must restore gen_thumb.
-        
-        # RESTORING gen_thumb definition (was accidentally removed in the explanation, but kept in code)
+        # 2. Define and Generate thumbnail (Restored from previous working code)
         def gen_thumb(image_path, uid):
             """Generates a 320x320 thumbnail from the welcome image."""
             try:
@@ -224,7 +211,6 @@ async def greet_new_member(_, member: ChatMemberUpdated):
 
 **━━━━━━━━━━━━━━━━━━━━**
 """,
-            # Removed 'thumb' keyword argument for Pyrogram v2+ compatibility
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(text="⚔️ ᴋɪᴅɴᴀᴘ ᴛʜɪs ʙᴏᴛ ⚔️", url=add_link)],
             ])
