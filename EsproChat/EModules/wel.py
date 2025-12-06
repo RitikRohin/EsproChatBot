@@ -1,8 +1,12 @@
+# ==================================
+#    FINAL WELCOME MODULE (EsproChat)
+# ==================================
+
 from EsproChat import app
 from pyrogram import Client, filters, enums
 from pyrogram.types import ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageChops
-from os import getLogger
+from logging import getLogger  # Corrected import from 'os' to 'logging'
 
 LOGGER = getLogger(__name__)
 
@@ -14,7 +18,17 @@ class temp:
 # --- Image Processing Functions ---
 
 def circle(pfp, size=(500, 500), brightness_factor=1.3):
-    """Makes the profile picture circular and enhances brightness."""
+    """
+    Makes the profile picture circular and enhances brightness.
+    
+    Args:
+        pfp (PIL.Image): The input profile picture image object.
+        size (tuple): The desired size for the circular image.
+        brightness_factor (float): Enhancement factor for brightness.
+        
+    Returns:
+        PIL.Image: The processed circular and transparent image.
+    """
     try:
         resize_filter = Image.Resampling.LANCZOS
     except AttributeError:
@@ -35,6 +49,7 @@ def circle(pfp, size=(500, 500), brightness_factor=1.3):
 
 def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     """Generates the welcome image with DP overlay."""
+    # Ensure EsproChat/assets/wel2.png exists
     background = Image.open("EsproChat/assets/wel2.png")
     pfp = Image.open(pic).convert("RGBA")
     pfp = circle(pfp, brightness_factor=brightness_factor) 
@@ -42,6 +57,7 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     
     draw = ImageDraw.Draw(background)
 
+    # Paste the circular DP at the specified coordinates
     pfp_position = (332, 323)
     background.paste(pfp, pfp_position, pfp)
     
@@ -57,19 +73,22 @@ async def greet_new_member(_, member: ChatMemberUpdated):
 
     chat_id = member.chat.id
     
+    # Check if a new member actually joined
     if not (member.new_chat_member and not member.old_chat_member and member.new_chat_member.status != enums.ChatMemberStatus.KICKED):
         return
 
     user = member.new_chat_member.user
-    # Get the chat title dynamically
     chat_title = member.chat.title
     count = await app.get_chat_members_count(chat_id)
     
+    # Download PFP
     try:
         pic = await app.download_media(
             user.photo.big_file_id, file_name=f"pp{user.id}.png"
         )
     except AttributeError:
+        # Default PFP if user has none
+        # Ensure EsproChat/assets/upic.png exists
         pic = "EsproChat/assets/upic.png"
         
     # Delete last welcome message for cleanup
@@ -89,7 +108,7 @@ async def greet_new_member(_, member: ChatMemberUpdated):
         # Define link
         add_link = f"https://t.me/{app.username}?startgroup=true"
         
-        # Send photo and caption
+        # Send photo and highly-designed caption
         msg = await app.send_photo(
             member.chat.id,
             photo=welcomeimg,
@@ -107,7 +126,6 @@ async def greet_new_member(_, member: ChatMemberUpdated):
 """,
             # Markup contains only the "Kidnap Me" button
             reply_markup=InlineKeyboardMarkup([
-                # Button text changed for better styling
                 [InlineKeyboardButton(text="⚔️ ᴋɪᴅɴᴀᴘ ᴛʜɪs ʙᴏᴛ ⚔️", url=add_link)],
             ])
         )
