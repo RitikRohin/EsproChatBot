@@ -7,7 +7,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageChops
 from logging import getLogger
-import os
+# import os # os import removed
 
 LOGGER = getLogger(__name__)
 
@@ -40,12 +40,10 @@ def circle(pfp, size=(500, 500), brightness_factor=1.3):
 
 def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     """
-    Generates the welcome image using the custom background 
-    and adjusted coordinates for PFP overlay.
+    Generates the welcome image using the custom background.
     """
-    # **NOTE: You must ensure 'EsproChat/assets/wel_new' exists in your file system.**
-    # The file extension is removed as requested, but PIL requires a valid file path.
-    background = Image.open("EsproChat/assets/wel_new") 
+    # NOTE: Assumes the file is named wel_new.png in the assets folder
+    background = Image.open("EsproChat/assets/wel_new.png") 
     pfp = Image.open(pic).convert("RGBA")
     pfp = circle(pfp, brightness_factor=brightness_factor) 
     
@@ -56,21 +54,22 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     pfp_position = (490, 260) 
     background.paste(pfp, pfp_position, pfp)
     
-    # File path modified: extension removed from template string
-    file_path = f"downloads/welcome#{id}" 
-    background.save(file_path + ".png") # Saving as PNG is necessary for proper file handling
-    return file_path + ".png" # Return the full path with extension for Pyrogram
+    # Saving file with .png extension
+    file_path = f"downloads/welcome#{id}.png" 
+    background.save(file_path) 
+    return file_path
 
 def gen_thumb(image_path, uid):
     """Generates a 320x320 thumbnail from the welcome image."""
     try:
         img = Image.open(image_path)
+        # Resizing to fit Telegram's standard thumbnail size
         img.thumbnail((320, 320)) 
         
-        # File path modified: extension removed from template string
-        thumb_path = f"downloads/thumb_{uid}" 
-        img.save(thumb_path + ".png") # Saving as PNG is necessary
-        return thumb_path + ".png"
+        # Saving file with .png extension
+        thumb_path = f"downloads/thumb_{uid}.png" 
+        img.save(thumb_path) 
+        return thumb_path
     except Exception as e:
         LOGGER.error(f"Error generating thumbnail: {e}")
         return None
@@ -82,29 +81,30 @@ async def greet_new_member(_, member: ChatMemberUpdated):
     """
     Automatically sends a welcome message when a new member joins.
     """
-    thumb_path = None
     welcomeimg = None
+    thumb_path = None
     
     chat_id = member.chat.id
-    user_id = member.new_chat_member.user.id
     
     if not (member.new_chat_member and not member.old_chat_member):
         return
 
+    if not member.new_chat_member.user:
+        return 
+        
     user = member.new_chat_member.user
+    user_id = user.id
     chat_title = member.chat.title
     count = await app.get_chat_members_count(chat_id)
     
     # Download PFP
     try:
-        # File name modified: extension removed from template string
-        pic_filename = f"pp{user_id}"
+        pic_filename = f"pp{user_id}" 
         pic = await app.download_media(
             user.photo.big_file_id, file_name=pic_filename
         )
     except AttributeError:
-        # Default PFP reference modified (You must ensure this file exists)
-        pic = "EsproChat/assets/upic"
+        pic = "EsproChat/assets/upic.png"
         
     # Delete last welcome message for cleanup
     old = temp.last.get(chat_id)
@@ -136,7 +136,7 @@ async def greet_new_member(_, member: ChatMemberUpdated):
 **━━━━━━━━━━━━━━━━━━━━**
 
 👑 **ɴᴇᴡ ᴍᴇᴍʙᴇʀ:** {user.mention}
-✨ **ɪᴅ:** `{user.id}`
+✨ **ɪᴅ:** `{user_id}`
 🌐 **ᴜsᴇʀɴᴀᴍᴇ:** @{user.username or 'Not Set'}
 👥 **ᴛᴏᴛᴀʟ ᴍᴇᴍʙᴇʀs:** `{count}`
 
@@ -154,14 +154,10 @@ async def greet_new_member(_, member: ChatMemberUpdated):
     except Exception as e:
         LOGGER.error(f"Error sending welcome message: {e}")
         
-    finally:
-        # Clean up generated files (main image and thumbnail)
-        if welcomeimg and os.path.exists(welcomeimg):
-            os.remove(welcomeimg)
-        if thumb_path and os.path.exists(thumb_path):
-            os.remove(thumb_path)
-        
-        # Clean up downloaded PFP (Pyrogram handles the extension in download_media)
-        # We must assume the downloaded file has an extension, and only delete if it's not the default asset.
-        if pic.startswith(f"pp{user_id}") and os.path.exists(pic):
-             os.remove(pic)
+    # finally: # Removed 'finally' block and file cleanup logic
+    #     if welcomeimg and os.path.exists(welcomeimg):
+    #         os.remove(welcomeimg)
+    #     if thumb_path and os.path.exists(thumb_path):
+    #         os.remove(thumb_path)
+    #     if pic != "EsproChat/assets/upic.png" and os.path.exists(pic):
+    #          os.remove(pic)
