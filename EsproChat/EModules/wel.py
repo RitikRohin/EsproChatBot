@@ -1,144 +1,119 @@
-# ============================
-#       CLEAN WELCOME CODE
-# ============================
-
 from EsproChat import app
-from pyrogram import filters, enums
-from pyrogram.types import Message, ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance
-from logging import getLogger
+from pyrogram import Client, filters, enums
+from pyrogram.types import ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageChops
+from os import getLogger
 
 LOGGER = getLogger(__name__)
 
-
-# -------------- TEMP STORAGE --------------
-
-class Temp:
-    """Stores the last welcome message ID for each chat for deletion."""
+# --- Temporary Storage (Used only for deleting the previous welcome message) ---
+class temp:
+    """Stores the last sent welcome message for cleanup."""
     last = {}
-
-temp = Temp()
-
-
-# ------------- IMAGE FUNCTIONS -------------
-
-def circle(pfp, size=(500, 500), brightness=10):
-    """
-    Processes the profile picture (pfp) to make it circular and adjust brightness.
     
-    Args:
-        pfp (PIL.Image): The input profile picture image object.
-        size (tuple): The desired size for the circular image.
-        brightness (int): Enhancement factor for brightness.
+# --- Image Processing Functions ---
+
+def circle(pfp, size=(500, 500), brightness_factor=1.3):
+    """Makes the profile picture circular and enhances brightness."""
+    try:
+        resize_filter = Image.Resampling.LANCZOS
+    except AttributeError:
+        resize_filter = Image.ANTIALIAS
         
-    Returns:
-        PIL.Image: The processed circular and transparent image.
-    """
-    pfp = pfp.resize(size).convert("RGBA")
-    # Enhance brightness
-    pfp = ImageEnhance.Brightness(pfp).enhance(brightness)
-
-    # Create a circular mask
-    mask = Image.new("L", (size[0]*3, size[1]*3), 0)
-    draw = ImageDraw.Draw(mask)
-    draw.ellipse((0, 0, size[0]*3, size[1]*3), fill=255)
-    mask = mask.resize(size)
+    pfp = pfp.resize(size, resize_filter).convert("RGBA")
+    pfp = ImageEnhance.Brightness(pfp).enhance(brightness_factor)
     
-    # Apply the mask to make the corners transparent
+    bigsize = (pfp.size[0] * 3, pfp.size[1] * 3)
+    mask = Image.new("L", bigsize, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0, 0) + bigsize, fill=255)
+    mask = mask.resize(pfp.size, resize_filter)
+    mask = ImageChops.darker(mask, pfp.split()[-1])
+    
     pfp.putalpha(mask)
     return pfp
 
-
-def make_welcome(pic, name, chat, uid):
-    """
-    Generates the final welcome image by overlaying the user's DP on the background.
-    
-    Args:
-        pic (str): Path to the user's downloaded profile picture.
-        name (str): User's first name (not used in image generation, but kept for context).
-        chat (str): Chat title (not used in image generation, but kept for context).
-        uid (int): User ID, used for saving the unique image file.
-        
-    Returns:
-        str: The file path to the generated welcome image.
-    """
-    # Load background image
-    bg = Image.open("EsproChat/assets/wel2.png")
-    
-    # Load and process profile picture
+def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
+    """Generates the welcome image with DP overlay."""
+    background = Image.open("EsproChat/assets/wel2.png")
     pfp = Image.open(pic).convert("RGBA")
-    pfp = circle(pfp)
+    pfp = circle(pfp, brightness_factor=brightness_factor) 
     pfp = pfp.resize((635, 635))
+    
+    draw = ImageDraw.Draw(background)
 
-    # Paste the circular DP onto the background at (332, 323)
-    bg.paste(pfp, (332, 323), pfp)
+    pfp_position = (332, 323)
+    background.paste(pfp, pfp_position, pfp)
+    
+    file_path = f"downloads/welcome#{id}.png"
+    background.save(file_path)
+    return file_path
 
-    # Save the final image
-    path = f"downloads/welcome_{uid}.png"
-    bg.save(path)
-    return path
+# --- Handler (Automatic Welcome) ---
 
+@app.on_chat_member_updated(filters.group, group=-3)
+async def greet_new_member(_, member: ChatMemberUpdated):
+    """Automatically sends a welcome message when a new member joins."""
 
-# ------------ NEW MEMBER JOIN HANDLER ------------
-
-@app.on_chat_member_updated(filters.group, group=-5)
-async def welcome(_, u: ChatMemberUpdated):
-    """Handles new member joins, generates, and sends the welcome message."""
-
-    # block if not a new member (i.e., if it's a status change or a user leaving)
-    if not u.new_chat_member or u.old_chat_member:
+    chat_id = member.chat.id
+    
+    if not (member.new_chat_member and not member.old_chat_member and member.new_chat_member.status != enums.ChatMemberStatus.KICKED):
         return
 
-    chat = u.chat.id
-    user = u.new_chat_member.user
-
-    # Get total members
-    total = await app.get_chat_members_count(chat)
-
-    # get user pfp or default
+    user = member.new_chat_member.user
+    # Get the chat title dynamically
+    chat_title = member.chat.title
+    count = await app.get_chat_members_count(chat_id)
+    
     try:
         pic = await app.download_media(
-            user.photo.big_file_id,
-            file_name=f"pfp_{user.id}.png"
+            user.photo.big_file_id, file_name=f"pp{user.id}.png"
         )
-    except Exception as e:
-        LOGGER.error(f"Error downloading PFP for {user.id}: {e}")
+    except AttributeError:
         pic = "EsproChat/assets/upic.png"
-
-    # delete last welcome message for cleanup
-    old = temp.last.get(chat)
+        
+    # Delete last welcome message for cleanup
+    old = temp.last.get(chat_id)
     if old:
         try:
             await old.delete()
         except Exception as e:
-            LOGGER.error(f"Error deleting old welcome message in chat {chat}: {e}")
-            pass
+            LOGGER.error(f"Error deleting old welcome message: {e}")
 
-    # generate welcome image
-    img = make_welcome(pic, user.first_name, u.chat.title, user.id)
+    try:
+        # Generate image
+        welcomeimg = welcomepic(
+            pic, user.first_name, chat_title, user.id, user.username
+        )
+        
+        # Define link
+        add_link = f"https://t.me/{app.username}?startgroup=true"
+        
+        # Send photo and caption
+        msg = await app.send_photo(
+            member.chat.id,
+            photo=welcomeimg,
+            caption=f"""
+👋 **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ {chat_title}** 🌹
 
-    # buttons for the message
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("👤 View Member", url=f"tg://user?id={user.id}")],
-        [InlineKeyboardButton("➕ Add Bot", url=f"https://t.me/{app.username}?startgroup=true")]
-    ])
+**━━━━━━━━━━━━━━━━━━━━**
 
-    # send the welcome message
-    msg = await app.send_photo(
-        chat,
-        img,
-        caption=f"""
-**❅────✦ ᴡᴇʟᴄᴏᴍᴇ ✦────❅**
+👑 **ɴᴇᴡ ᴍᴇᴍʙᴇʀ:** {user.mention}
+✨ **ɪᴅ:** `{user.id}`
+🌐 **ᴜsᴇʀɴᴀᴍᴇ:** @{user.username or 'Not Set'}
+👥 **ᴛᴏᴛᴀʟ ᴍᴇᴍʙᴇʀs:** `{count}`
 
-**➻ Name:** {user.mention}
-**➻ ID:** `{user.id}`
-**➻ Username:** @{user.username or 'N/A'}
-**➻ Total Members:** {total}
-
-❅─────✧❅✦❅✧─────❅
+**━━━━━━━━━━━━━━━━━━━━**
 """,
-        reply_markup=buttons
-    )
-
-    # Store the new message for future deletion
-    temp.last[chat] = msg
+            # Markup contains only the "Kidnap Me" button
+            reply_markup=InlineKeyboardMarkup([
+                # Button text changed for better styling
+                [InlineKeyboardButton(text="⚔️ ᴋɪᴅɴᴀᴘ ᴛʜɪs ʙᴏᴛ ⚔️", url=add_link)],
+            ])
+        )
+        
+        # Store the new message for cleanup
+        temp.last[chat_id] = msg
+        
+    except Exception as e:
+        LOGGER.error(f"Error sending welcome message: {e}")
