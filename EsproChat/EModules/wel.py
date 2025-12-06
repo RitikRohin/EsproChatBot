@@ -48,12 +48,11 @@ def circle(pfp, size=(500, 500), brightness_factor=1.3):
     pfp.putalpha(mask)
     return pfp
 
-# 🔄 CHANGE 1: Function signature changed. 'user' is now 'username_str' 
-# and 'uname' is now 'total_count_str'.
+# 🔄 Function signature: pic, username_str, chatname, id_int, total_count_str
 def welcomepic(pic, username_str, chatname, id_int, total_count_str, brightness_factor=1.3):
     """
     Generates the welcome image dynamically with a solid color background 
-    and adds text overlay to the right side.
+    and adds text overlay (First Name, ID, Count) to the right side.
     """
     BG_WIDTH, BG_HEIGHT = 1280, 720
     background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
@@ -82,11 +81,14 @@ def welcomepic(pic, username_str, chatname, id_int, total_count_str, brightness_
     
     # Text Overlay Logic (Right Side) 
     
-    # Define Fonts (Ensure these fonts are available)
+    # Define Fonts (Ensure 'arial.ttf' is available)
     try:
-        title_font = ImageFont.truetype("arial.ttf", 200) 
-        content_font = ImageFont.truetype("arial.ttf", 190)
+        # ✅ Font Size Optimized for 1280x720: Title Font Size 
+        title_font = ImageFont.truetype("arial.ttf", 60) 
+        # ✅ Font Size Optimized: Content Font Size 
+        content_font = ImageFont.truetype("arial.ttf", 45)
     except IOError:
+        # Fallback to default font if file not found (text will be small)
         title_font = ImageFont.load_default()
         content_font = ImageFont.load_default()
 
@@ -94,27 +96,28 @@ def welcomepic(pic, username_str, chatname, id_int, total_count_str, brightness_
     
     START_X = 650 
     START_Y = 200 
-    LINE_HEIGHT = 70
+    # ✅ Line Height Optimized
+    LINE_HEIGHT = 100 
     
     # Data to display
     username = username_str or "New Member"
     member_id = str(id_int)
     total_count = total_count_str
     
-    # Line 1: Welcome Message / User Name
-    draw.text((START_X, START_Y), 
+    # Line 1: Welcome Message / User Name (Shifted Upwards)
+    draw.text((START_X, START_Y - 100), 
               f"WELCOME, {username.upper()}", 
               fill=TEXT_COLOR, 
               font=title_font)
               
     # Line 2: User ID
-    draw.text((START_X, START_Y + 2 * LINE_HEIGHT), 
+    draw.text((START_X, START_Y + 1 * LINE_HEIGHT), 
               f"🆔 User ID: {member_id}", 
               fill=TEXT_COLOR, 
               font=content_font)
               
     # Line 3: Total Members
-    draw.text((START_X, START_Y + 3 * LINE_HEIGHT), 
+    draw.text((START_X, START_Y + 2 * LINE_HEIGHT), 
               f"👥 Total Members: {total_count}", 
               fill=TEXT_COLOR, 
               font=content_font)
@@ -125,7 +128,8 @@ def welcomepic(pic, username_str, chatname, id_int, total_count_str, brightness_
     background.save(file_path) 
     return file_path
 
-# ❌ gen_thumb function is defined in the handler for simplicity (from previous version)
+# --- gen_thumb function (Defined inside handler for Pyrogram v2+ compatibility) ---
+
 
 # --- Handler (Automatic Welcome) ---
 
@@ -160,6 +164,7 @@ async def greet_new_member(_, member: ChatMemberUpdated):
             user.photo.big_file_id, file_name=pic_filename
         )
     except AttributeError:
+        # Default PFP path (Ensure this file 'upic.png' exists in assets)
         pic = "EsproChat/assets/upic.png"
         
     # Delete last welcome message for cleanup
@@ -172,12 +177,11 @@ async def greet_new_member(_, member: ChatMemberUpdated):
 
     try:
         # 1. Generate main image 
-        # 🔄 CHANGE 2: Calling welcomepic with string arguments (First Name, Count)
         welcomeimg = welcomepic(
             pic, user.first_name, chat_title, user_id, str(count)
         )
         
-        # 2. Define and Generate thumbnail (Restored from previous working code)
+        # 2. Define and Generate thumbnail
         def gen_thumb(image_path, uid):
             """Generates a 320x320 thumbnail from the welcome image."""
             try:
