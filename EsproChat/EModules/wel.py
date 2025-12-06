@@ -7,9 +7,21 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageChops
 from logging import getLogger
-# import os # File cleanup is removed as requested
+import os # os import is needed for creating directories
 
 LOGGER = getLogger(__name__)
+
+# --- Directory Setup (Ensure 'downloads' directory exists) ---
+# FIX: Agar 'downloads' folder nahi hai, toh use banao
+DOWNLOADS_DIR = 'downloads'
+if not os.path.isdir(DOWNLOADS_DIR):
+    try:
+        os.makedirs(DOWNLOADS_DIR)
+    except Exception as e:
+        LOGGER.error(f"Failed to create downloads directory: {e}")
+        
+# NOTE: Ensure 'EsproChat/assets/' directory and 'upic.png' also exist.
+# -------------------------------------------------------------
 
 # --- Temporary Storage (Used only for deleting the previous welcome message) ---
 class temp:
@@ -40,9 +52,9 @@ def circle(pfp, size=(500, 500), brightness_factor=1.3):
 
 def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     """
-    Generates the welcome image dynamically with a solid color background.
+    Generates the welcome image dynamically with a solid color background (no external background file).
     """
-    # 💥 CHANGE: Dynamically creating a deep indigo background (1280x720)
+    # Dynamically creating a deep indigo background (1280x720)
     BG_WIDTH, BG_HEIGHT = 1280, 720
     # Deep Indigo/Purple Color
     background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
@@ -50,14 +62,14 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     pfp = Image.open(pic).convert("RGBA")
     pfp = circle(pfp, brightness_factor=brightness_factor) 
     
-    # PFP size and position adjusted for the simple center (e.g., center of 1280x720)
+    # PFP size and position adjusted for the simple center
     PFP_SIZE = 380
     pfp = pfp.resize((PFP_SIZE, PFP_SIZE)) 
     
-    # Calculating the center position for PFP: (BG_WIDTH/2 - PFP_SIZE/2, BG_HEIGHT/2 - PFP_SIZE/2)
+    # Calculating the center position for PFP
     PFP_X = (BG_WIDTH // 2) - (PFP_SIZE // 2) 
     PFP_Y = (BG_HEIGHT // 2) - (PFP_SIZE // 2)
-    pfp_position = (PFP_X, PFP_Y) # Should be around (450, 170)
+    pfp_position = (PFP_X, PFP_Y)
     
     draw = ImageDraw.Draw(background)
 
@@ -70,8 +82,8 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     
     background.paste(pfp, pfp_position, pfp)
     
-    # Saving file with .png extension
-    file_path = f"downloads/welcome#{id}.png" 
+    # Saving file
+    file_path = f"{DOWNLOADS_DIR}/welcome#{id}.png" 
     background.save(file_path) 
     return file_path
 
@@ -81,8 +93,7 @@ def gen_thumb(image_path, uid):
         img = Image.open(image_path)
         img.thumbnail((320, 320)) 
         
-        # Saving file with .png extension
-        thumb_path = f"downloads/thumb_{uid}.png" 
+        thumb_path = f"{DOWNLOADS_DIR}/thumb_{uid}.png" 
         img.save(thumb_path) 
         return thumb_path
     except Exception as e:
@@ -114,13 +125,13 @@ async def greet_new_member(_, member: ChatMemberUpdated):
     
     # Download PFP
     try:
+        # File name template
         pic_filename = f"pp{user_id}" 
         pic = await app.download_media(
             user.photo.big_file_id, file_name=pic_filename
         )
     except AttributeError:
-        # NOTE: Default PFP (upic.png) must still be available locally, 
-        # or you can replace this with another dynamically generated image.
+        # Default PFP path (Ensure this file 'upic.png' exists in assets)
         pic = "EsproChat/assets/upic.png"
         
     # Delete last welcome message for cleanup
@@ -170,5 +181,3 @@ async def greet_new_member(_, member: ChatMemberUpdated):
         
     except Exception as e:
         LOGGER.error(f"Error sending welcome message: {e}")
-        
-    # File cleanup logic is intentionally removed.
