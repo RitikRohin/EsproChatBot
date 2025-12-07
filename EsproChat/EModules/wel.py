@@ -50,23 +50,26 @@ def circle(pfp, size=(500, 500), brightness_factor=1.3):
 
 def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     """
-    Generates the welcome image dynamically with a solid color background (no external background file).
+    Generates the welcome image dynamically with a solid color background.
+    MODIFIED: PFP is moved to the left side.
     """
     # Dynamically creating a deep indigo background (1280x720)
     BG_WIDTH, BG_HEIGHT = 1280, 720
     # Deep Indigo/Purple Color
     background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
     
-    # 💥 NOTE: Image.open() will fail if the file is missing (e.g., upic.png)
     pfp = Image.open(pic).convert("RGBA")
     pfp = circle(pfp, brightness_factor=brightness_factor) 
     
-    # PFP size and position adjusted for the simple center
+    # PFP size
     PFP_SIZE = 380
     pfp = pfp.resize((PFP_SIZE, PFP_SIZE)) 
     
-    # Calculating the center position for PFP
-    PFP_X = (BG_WIDTH // 2) - (PFP_SIZE // 2) 
+    # --- MODIFICATION: Calculating position for LEFT alignment ---
+    
+    # PFP X-coordinate: Set to 10% margin from the left edge
+    PFP_X = int(BG_WIDTH * 0.10)  
+    # PFP Y-coordinate: Still centered vertically
     PFP_Y = (BG_HEIGHT // 2) - (PFP_SIZE // 2)
     pfp_position = (PFP_X, PFP_Y)
     
@@ -74,19 +77,25 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
 
     # Drawing a simple white border circle around the PFP
     BORDER_SIZE = PFP_SIZE + 20
-    BORDER_X = (BG_WIDTH // 2) - (BORDER_SIZE // 2)
-    BORDER_Y = (BG_HEIGHT // 2) - (BORDER_SIZE // 2)
+    
+    # Border X-coordinate (PFP_X minus 10px for padding)
+    BORDER_X = PFP_X - 10 
+    # Border Y-coordinate (PFP_Y minus 10px for padding)
+    BORDER_Y = PFP_Y - 10 
+    
+    # Draw the white border ellipse
     draw.ellipse((BORDER_X, BORDER_Y, BORDER_X + BORDER_SIZE, BORDER_Y + BORDER_SIZE), 
                  outline='white', width=5)
     
+    # Paste the PFP
     background.paste(pfp, pfp_position, pfp)
+    
+    # --- END MODIFICATION ---
     
     # Saving file
     file_path = f"{DOWNLOADS_DIR}/welcome#{id}.png" 
     background.save(file_path) 
     return file_path
-
-# ❌ REMOVED: gen_thumb function is no longer needed
 
 # --- Handler (Automatic Welcome) ---
 
@@ -94,10 +103,8 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
 async def greet_new_member(_, member: ChatMemberUpdated):
     """
     Automatically sends a welcome message when a new member joins.
-    Thumbnail generation and passing 'thumb' keyword argument are removed.
     """
     welcomeimg = None
-    # thumb_path is removed
     
     chat_id = member.chat.id
     
@@ -136,28 +143,22 @@ async def greet_new_member(_, member: ChatMemberUpdated):
             pic, user.first_name, chat_title, user_id, user.username
         )
         
-        # ❌ REMOVED: No thumbnail generation
-        
         # Define link
         add_link = f"https://t.me/{app.username}?startgroup=true"
         
-        # Send photo (without 'thumb' argument, Pyrogram will generate it automatically)
+        # Send photo 
         msg = await app.send_photo(
             member.chat.id,
             photo=welcomeimg,
             caption=f"""
-👋 **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ {chat_title}** 🌹
-
-**━━━━━━━━━━━━━━━━━━━━**
-
+<blockquote>👋 **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ {chat_title}** 🌹</blockquote>
+<blockquote>**━━━━━━━━━━━━━━━━━━━━**
 👑 **ɴᴇᴡ ᴍᴇᴍʙᴇʀ:** {user.mention}
 ✨ **ɪᴅ:** `{user_id}`
 🌐 **ᴜsᴇʀɴᴀᴍᴇ:** @{user.username or 'Not Set'}
 👥 **ᴛᴏᴛᴀʟ ᴍᴇᴍʙᴇʀs:** `{count}`
-
-**━━━━━━━━━━━━━━━━━━━━**
+**━━━━━━━━━━━━━━━━━━━━**</blockquote>
 """,
-            # ❌ REMOVED: thumb=thumb_path,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(text="⚔️ ᴋɪᴅɴᴀᴘ ᴛʜɪs ʙᴏᴛ ⚔️", url=add_link)],
             ])
