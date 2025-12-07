@@ -56,8 +56,11 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     """
     
     BG_WIDTH, BG_HEIGHT = 1280, 720
-    resize_filter = Image.Resampling.LANCZOS # Define filter once
-    
+    try:
+        resize_filter = Image.Resampling.LANCZOS
+    except AttributeError:
+        resize_filter = Image.ANTIALIAS
+        
     # --- Background Selection (Using the provided path as a background) ---
     background_path = "EsproChat/assets/wel2.png"
     try:
@@ -98,27 +101,9 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     # Paste the PFP
     background.paste(pfp, pfp_position, pfp)
     
-    # --- LOGO OVERLAY ADDITION (Example Placeholder) ---
-    # To add a logo (e.g., logo.png) on top of the background image:
-    try:
-        logo_path = "EsproChat/assets/wel2.png" # Assuming your logo is here
-        logo = Image.open(logo_path).convert("RGBA")
-        
-        LOGO_SIZE = 200 # Set your desired logo size
-        logo = logo.resize((LOGO_SIZE, LOGO_SIZE), resize_filter)
-        
-        # Position: Top Right Corner (50px margin)
-        LOGO_X = BG_WIDTH - LOGO_SIZE - 50 
-        LOGO_Y = 50 
-        
-        background.paste(logo, (LOGO_X, LOGO_Y), logo)
-        
-    except FileNotFoundError:
-        # LOGGER.warning("Logo PNG file not found. Skipping overlay.")
-        pass # Silently skip if logo is not mandatory
-    except Exception as e:
-        LOGGER.error(f"Error adding logo overlay: {e}")
-    # ----------------------------------------------------
+    # --- LOGO OVERLAY ADDITION (REMOVED) ---
+    # The code for loading and pasting logo.png has been removed here.
+    # ---------------------------------------
     
     # Saving file
     file_path = f"{DOWNLOADS_DIR}/welcome#{id}.png" 
@@ -186,13 +171,16 @@ async def greet_new_member(_, member: ChatMemberUpdated):
             member.chat.id,
             photo=welcomeimg,
             caption=f"""
-<blockquote>👋 **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ {chat_title}** 🌹</blockquote>
-<blockquote>**━━━━━━━━━━━━━━━━━━━━**
+👋 **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ {chat_title}** 🌹
+
+**━━━━━━━━━━━━━━━━━━━━**
+
 👑 **ɴᴇᴡ ᴍᴇᴍʙᴇʀ:** {user.mention}
 ✨ **ɪᴅ:** `{user_id}`
 🌐 **ᴜsᴇʀɴᴀᴍᴇ:** @{user.username or 'Not Set'}
 👥 **ᴛᴏᴛᴀʟ ᴍᴇᴍʙᴇʀs:** `{count}`
-**━━━━━━━━━━━━━━━━━━━━**</blockquote>
+
+**━━━━━━━━━━━━━━━━━━━━**
 """,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(text="⚔️ ᴋɪᴅɴᴀᴘ ᴛʜɪs ʙᴏᴛ ⚔️", url=add_link)],
@@ -211,4 +199,3 @@ async def greet_new_member(_, member: ChatMemberUpdated):
                 os.remove(pic)
             except Exception as e:
                 LOGGER.error(f"Error deleting temporary PFP file: {e}")
-        
