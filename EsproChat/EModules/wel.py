@@ -50,26 +50,37 @@ def circle(pfp, size=(500, 500), brightness_factor=1.3):
 
 def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     """
-    Generates the welcome image dynamically with a solid color background.
-    MODIFIED: PFP is moved to the left side.
+    Generates the welcome image dynamically.
+    Uses 'EsproChat/assets/wel2.png' as the background if available, 
+    otherwise uses a solid color. PFP is moved to the left side.
     """
-    # Dynamically creating a deep indigo background (1280x720)
-    BG_WIDTH, BG_HEIGHT = 1280, 720
-    # Deep Indigo/Purple Color
-    background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
     
+    BG_WIDTH, BG_HEIGHT = 1280, 720
+    resize_filter = Image.Resampling.LANCZOS # Define filter once
+    
+    # --- Background Selection (Using the provided path as a background) ---
+    background_path = "EsproChat/assets/wel2.png"
+    try:
+        # Try loading the provided PNG as background
+        background = Image.open(background_path).convert('RGB')
+        background = background.resize((BG_WIDTH, BG_HEIGHT), resize_filter)
+    except FileNotFoundError:
+        LOGGER.warning(f"Background image {background_path} not found. Using solid color.")
+        # Fallback to Deep Indigo/Purple Color
+        background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
+    except Exception as e:
+        LOGGER.error(f"Error loading background image: {e}")
+        background = Image.new('RGB', (BG_WIDTH, BG_HEIGHT), color='#2C003E') 
+        
+    # --- PFP Processing ---
     pfp = Image.open(pic).convert("RGBA")
     pfp = circle(pfp, brightness_factor=brightness_factor) 
     
-    # PFP size
+    # PFP size and position
     PFP_SIZE = 380
-    pfp = pfp.resize((PFP_SIZE, PFP_SIZE)) 
+    pfp = pfp.resize((PFP_SIZE, PFP_SIZE), resize_filter) 
     
-    # --- MODIFICATION: Calculating position for LEFT alignment ---
-    
-    # PFP X-coordinate: Set to 10% margin from the left edge
     PFP_X = int(BG_WIDTH * 0.10)  
-    # PFP Y-coordinate: Still centered vertically
     PFP_Y = (BG_HEIGHT // 2) - (PFP_SIZE // 2)
     pfp_position = (PFP_X, PFP_Y)
     
@@ -77,10 +88,7 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
 
     # Drawing a simple white border circle around the PFP
     BORDER_SIZE = PFP_SIZE + 20
-    
-    # Border X-coordinate (PFP_X minus 10px for padding)
     BORDER_X = PFP_X - 10 
-    # Border Y-coordinate (PFP_Y minus 10px for padding)
     BORDER_Y = PFP_Y - 10 
     
     # Draw the white border ellipse
@@ -90,7 +98,27 @@ def welcomepic(pic, user, chatname, id, uname, brightness_factor=1.3):
     # Paste the PFP
     background.paste(pfp, pfp_position, pfp)
     
-    # --- END MODIFICATION ---
+    # --- LOGO OVERLAY ADDITION (Example Placeholder) ---
+    # To add a logo (e.g., logo.png) on top of the background image:
+    try:
+        logo_path = "EsproChat/assets/wel2.png" # Assuming your logo is here
+        logo = Image.open(logo_path).convert("RGBA")
+        
+        LOGO_SIZE = 200 # Set your desired logo size
+        logo = logo.resize((LOGO_SIZE, LOGO_SIZE), resize_filter)
+        
+        # Position: Top Right Corner (50px margin)
+        LOGO_X = BG_WIDTH - LOGO_SIZE - 50 
+        LOGO_Y = 50 
+        
+        background.paste(logo, (LOGO_X, LOGO_Y), logo)
+        
+    except FileNotFoundError:
+        # LOGGER.warning("Logo PNG file not found. Skipping overlay.")
+        pass # Silently skip if logo is not mandatory
+    except Exception as e:
+        LOGGER.error(f"Error adding logo overlay: {e}")
+    # ----------------------------------------------------
     
     # Saving file
     file_path = f"{DOWNLOADS_DIR}/welcome#{id}.png" 
@@ -117,13 +145,20 @@ async def greet_new_member(_, member: ChatMemberUpdated):
     user = member.new_chat_member.user
     user_id = user.id
     chat_title = member.chat.title
-    count = await app.get_chat_members_count(chat_id)
     
+    try:
+        count = await app.get_chat_members_count(chat_id)
+    except Exception as e:
+        LOGGER.warning(f"Could not get member count: {e}")
+        count = "Unknown"
+
     # Download PFP
     try:
         pic_filename = f"pp{user_id}" 
+        # Use full path to save temporary downloaded files
+        temp_pic_path = os.path.join(DOWNLOADS_DIR, pic_filename) 
         pic = await app.download_media(
-            user.photo.big_file_id, file_name=pic_filename
+            user.photo.big_file_id, file_name=temp_pic_path
         )
     except AttributeError:
         # Default PFP path (Ensure this file 'upic.png' exists in assets)
@@ -169,3 +204,11 @@ async def greet_new_member(_, member: ChatMemberUpdated):
         
     except Exception as e:
         LOGGER.error(f"Error sending welcome message: {e}")
+    finally:
+        # Clean up downloaded PFP file after use (if not using the default 'upic.png')
+        if pic and "pp" in os.path.basename(pic):
+            try:
+                os.remove(pic)
+            except Exception as e:
+                LOGGER.error(f"Error deleting temporary PFP file: {e}")
+        
