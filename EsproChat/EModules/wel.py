@@ -1,32 +1,22 @@
 # ==================================
-#    WELCOME MODULE (EsproChat)
+#    SIMPLE WORKING WELCOME MODULE
 # ==================================
 
 from EsproChat import app
-from pyrogram import Client, filters, enums
+from pyrogram import Client, filters
 from pyrogram.types import ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageChops
+from logging import getLogger
 import os
 import time
 import asyncio
-import logging
 
-# Setup logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-LOGGER = logging.getLogger(__name__)
+LOGGER = getLogger(__name__)
 
 # --- Directory Setup ---
 DOWNLOADS_DIR = 'downloads'
 if not os.path.isdir(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
-
-# Create assets directory if not exists
-ASSETS_DIR = 'EsproChat/assets'
-if not os.path.isdir(ASSETS_DIR):
-    os.makedirs(ASSETS_DIR)
 
 # --- Temporary Storage ---
 class temp:
@@ -39,15 +29,20 @@ def circle(pfp, size=(500, 500)):
     """Makes the profile picture circular."""
     try:
         pfp = pfp.resize(size, Image.Resampling.LANCZOS).convert("RGBA")
-    except AttributeError:
+    except:
         pfp = pfp.resize(size, Image.ANTIALIAS).convert("RGBA")
     
-    # Create circular mask
-    mask = Image.new("L", size, 0)
+    bigsize = (pfp.size[0] * 3, pfp.size[1] * 3)
+    mask = Image.new("L", bigsize, 0)
     draw = ImageDraw.Draw(mask)
-    draw.ellipse((0, 0, size[0], size[1]), fill=255)
+    draw.ellipse((0, 0) + bigsize, fill=255)
     
-    # Apply mask
+    try:
+        mask = mask.resize(pfp.size, Image.Resampling.LANCZOS)
+    except:
+        mask = mask.resize(pfp.size, Image.ANTIALIAS)
+    
+    mask = ImageChops.darker(mask, pfp.split()[-1])
     pfp.putalpha(mask)
     return pfp
 
@@ -69,179 +64,51 @@ def create_simple_welcome_image(pfp_path, user_name, user_id, username, chat_nam
         font_large = ImageFont.load_default()
         font_medium = ImageFont.load_default()
         font_small = ImageFont.load_default()
-        # Scale up default font
-        try:
-            font_large.size = 40
-            font_medium.size = 30
-            font_small.size = 25
-        except:
-            pass
     
-    # ========== FIXED POSITIONS FOR BETTER LAYOUT ==========
-    
-    # Box position - CURRENT (थोड़ा नीचे)
-    box_width = 600
-    box_height = 180
-    box_x = (width - box_width) // 2  # Center horizontally
-    box_y = 80  # थोड़ा नीचे (पहले 50 था, अब 80)
-    
-    # Profile Picture position (LEFT SIDE)
-    pfp_x = 50
-    pfp_y = 150  # Box के नीचे
-    
-    # Welcome text position
-    welcome_y = 380
-    
-    # ========== ADD PROFILE PICTURE ==========
+    # Add profile picture
     try:
         if os.path.exists(pfp_path):
             pfp = Image.open(pfp_path).convert("RGBA")
             pfp = circle(pfp, size=(200, 200))
             
-            # Add PFP
-            image.paste(pfp, (pfp_x, pfp_y), pfp)
+            # Add PFP to image
+            image.paste(pfp, (50, 150), pfp)
             
-            # Add glowing border around PFP
-            for i in range(3):
-                border_size = 3 - i
-                draw.ellipse(
-                    [pfp_x-5-i, pfp_y-5-i, pfp_x+205+i, pfp_y+205+i],
-                    outline='#FFD700',
-                    width=border_size
-                )
-            
+            # Add border around PFP
+            draw.ellipse([45, 145, 255, 355], outline='#FFD700', width=3)
     except Exception as e:
         LOGGER.error(f"Error adding PFP: {e}")
-        # Draw placeholder if PFP fails
-        draw.ellipse([pfp_x, pfp_y, pfp_x+200, pfp_y+200], fill='#4a4aff', outline='#FFD700', width=3)
-        draw.text((pfp_x+70, pfp_y+85), "USER", fill='white', font=font_medium)
     
-    # ========== CREATE MEMBER INFO BOX ==========
-    # Create info box with shadow effect
-    draw.rounded_rectangle(
-        [box_x, box_y, box_x + box_width, box_y + box_height],
-        radius=25,  # More rounded corners
-        fill='#2d2d44',
-        outline='#FFD700',
-        width=3
-    )
+    # Add WELCOME text
+    draw.text((300, 50), "WELCOME", fill='#FFD700', font=font_large)
+    draw.text((300, 100), f"to {chat_name[:30]}", fill='white', font=font_medium)
     
-    # Add box title with gradient effect
-    title = "✨ NEW MEMBER ✨"
+    # Add member info box
+    info_y = 170
+    draw.rectangle([300, info_y, 950, info_y + 250], fill='#2d2d44', outline='#FFD700', width=2)
     
-    # Calculate title position (center)
-    if hasattr(draw, 'textbbox'):
-        title_bbox = draw.textbbox((0, 0), title, font=font_large)
-        title_width = title_bbox[2] - title_bbox[0]
+    # Add member information
+    draw.text((320, info_y + 20), f"👤 Name: {user_name[:25]}", fill='white', font=font_medium)
+    draw.text((320, info_y + 70), f"🆔 ID: {user_id}", fill='#00ffaa', font=font_medium)
+    
+    if username:
+        draw.text((320, info_y + 120), f"📱 Username: @{username[:20]}", fill='#87ceeb', font=font_medium)
     else:
-        # Fallback for older PIL
-        title_width = draw.textlength(title, font=font_large)
+        draw.text((320, info_y + 120), "📱 Username: Not Set", fill='#87ceeb', font=font_medium)
     
-    title_x = box_x + (box_width - title_width) // 2
+    draw.text((320, info_y + 170), f"👥 Members: {member_count}", fill='#ffa500', font=font_medium)
     
-    # Title with shadow
-    draw.text((title_x+2, box_y + 17), title, fill='#000000', font=font_large)  # Shadow
-    draw.text((title_x, box_y + 15), title, fill='#FFD700', font=font_large)   # Main text
+    # Add decorative line
+    draw.line([(300, info_y + 220), (950, info_y + 220)], fill='#FFD700', width=3)
     
-    # Add decorative line under title
-    line_y = box_y + 65
-    draw.line([(box_x + 40, line_y), (box_x + box_width - 40, line_y)], 
-              fill='#FFD700', width=3)
+    # Add timestamp
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    draw.text((320, info_y + 228), f"Joined: {timestamp}", fill='#aaaaaa', font=font_small)
     
-    # Add member information (TWO COLUMNS WITH BETTER SPACING)
-    info_start_y = box_y + 80
-    
-    # COLUMN 1 (Left side - 40% width)
-    # Name with icon
-    name_icon = "👤"
-    draw.text((box_x + 30, info_start_y), name_icon, fill='white', font=font_medium)
-    
-    # Truncate long names
-    display_name = user_name
-    if len(user_name) > 18:
-        display_name = user_name[:15] + "..."
-    draw.text((box_x + 70, info_start_y), display_name, fill='white', font=font_medium)
-    
-    # ID with icon
-    id_icon = "🆔"
-    draw.text((box_x + 30, info_start_y + 45), id_icon, fill='#00ffaa', font=font_medium)
-    draw.text((box_x + 70, info_start_y + 45), str(user_id), fill='#00ffaa', font=font_medium)
-    
-    # COLUMN 2 (Right side - 40% width)
-    # Username with icon
-    username_icon = "📱"
-    draw.text((box_x + 320, info_start_y), username_icon, fill='#87ceeb', font=font_medium)
-    
-    username_text = f"@{username[:12]}" if username else "No Username"
-    draw.text((box_x + 360, info_start_y), username_text, fill='#87ceeb', font=font_medium)
-    
-    # Members count with icon
-    members_icon = "👥"
-    draw.text((box_x + 320, info_start_y + 45), members_icon, fill='#ffa500', font=font_medium)
-    draw.text((box_x + 360, info_start_y + 45), str(member_count), fill='#ffa500', font=font_medium)
-    
-    # Add vertical separator line between columns
-    separator_x = box_x + 300
-    draw.line([(separator_x, info_start_y-5), (separator_x, info_start_y + 90)], 
-              fill='#555555', width=1)
-    
-    # ========== WELCOME TEXT (BIG AND BOLD) ==========
-    # Welcome text with shadow effect
-    welcome_text = "WELCOME"
-    draw.text((52, welcome_y+2), welcome_text, fill='#000000', font=font_large)  # Shadow
-    draw.text((50, welcome_y), welcome_text, fill='#FFD700', font=font_large)    # Main text
-    
-    # Add chat name with gradient
-    chat_display = chat_name
-    if len(chat_name) > 30:
-        chat_display = chat_name[:27] + "..."
-    chat_text = f"to {chat_display}"
-    draw.text((52, welcome_y + 52), chat_text, fill='#000000', font=font_medium)  # Shadow
-    draw.text((50, welcome_y + 50), chat_text, fill='#FFFFFF', font=font_medium)  # Main text
-    
-    # Add decorative arrow
-    arrow_x = pfp_x + 220
-    arrow_y = pfp_y + 100
-    draw.text((arrow_x, arrow_y), "➡️", fill='#FFD700', font=font_large)
-    
-    # ========== DECORATIVE ELEMENTS ==========
-    # Top decorative corners
-    draw.text((box_x - 35, box_y + 25), "⭐", fill='#FFD700', font=font_medium)
-    draw.text((box_x + box_width + 5, box_y + 25), "🌟", fill='#FFD700', font=font_medium)
-    
-    # Bottom decorative line with pattern
-    for i in range(0, 900, 30):
-        draw.line([(50+i, 470), (65+i, 470)], fill='#FFD700', width=3)
-    
-    # Add timestamp at bottom (centered)
-    timestamp = time.strftime("%d %b %Y • %I:%M %p")
-    
-    if hasattr(draw, 'textbbox'):
-        timestamp_bbox = draw.textbbox((0, 0), timestamp, font=font_small)
-        timestamp_width = timestamp_bbox[2] - timestamp_bbox[0]
-    else:
-        timestamp_width = draw.textlength(timestamp, font=font_small)
-    
-    timestamp_x = (width - timestamp_width) // 2
-    draw.text((timestamp_x, 480), timestamp, fill='#888888', font=font_small)
-    
-    # Add footer text
-    footer = "Welcome to our community! 🌟"
-    
-    if hasattr(draw, 'textbbox'):
-        footer_bbox = draw.textbbox((0, 0), footer, font=font_small)
-        footer_width = footer_bbox[2] - footer_bbox[0]
-    else:
-        footer_width = draw.textlength(footer, font=font_small)
-    
-    footer_x = (width - footer_width) // 2
-    draw.text((footer_x, 455), footer, fill='#aaaaaa', font=font_small)
-    
-    # Save image with high quality
+    # Save image
     output_path = f"{DOWNLOADS_DIR}/welcome_{user_id}_{int(time.time())}.jpg"
-    image.save(output_path, quality=95, optimize=True)
+    image.save(output_path, quality=95)
     
-    LOGGER.info(f"Created welcome image: {output_path}")
     return output_path
 
 # --- Handler (Automatic Welcome) ---
@@ -255,10 +122,10 @@ async def greet_new_member(client, member: ChatMemberUpdated):
         return
     
     # Check if user exists
-    user = member.new_chat_member.user
-    if not user:
+    if not member.new_chat_member.user:
         return
     
+    user = member.new_chat_member.user
     chat = member.chat
     
     # Skip bots
@@ -268,10 +135,10 @@ async def greet_new_member(client, member: ChatMemberUpdated):
     # Debug log
     LOGGER.info(f"New member joined: {user.first_name} in {chat.title}")
     
-    # Cooldown check (5 seconds)
+    # Cooldown check
     current_time = time.time()
     if chat.id in temp.cooldown:
-        if current_time - temp.cooldown[chat.id] < 5:
+        if current_time - temp.cooldown[chat.id] < 3:
             return
     
     temp.cooldown[chat.id] = current_time
@@ -280,8 +147,7 @@ async def greet_new_member(client, member: ChatMemberUpdated):
         # Get member count
         try:
             count = await client.get_chat_members_count(chat.id)
-        except Exception as e:
-            LOGGER.error(f"Error getting member count: {e}")
+        except:
             count = "Unknown"
         
         # Download profile picture
@@ -296,19 +162,16 @@ async def greet_new_member(client, member: ChatMemberUpdated):
                 LOGGER.info(f"Downloaded PFP to: {pfp_path}")
             else:
                 # Use default image
-                default_path = "EsproChat/assets/upic.png"
-                if not os.path.exists(default_path):
-                    # Create default image
+                pfp_path = "EsproChat/assets/upic.png"
+                if not os.path.exists(pfp_path):
+                    # Create a simple default image
                     default_img = Image.new('RGB', (200, 200), color='#4a4aff')
-                    draw_default = ImageDraw.Draw(default_img)
-                    draw_default.ellipse([20, 20, 180, 180], fill='#2d2d44')
-                    draw_default.text((70, 85), "USER", fill='white')
+                    draw = ImageDraw.Draw(default_img)
+                    draw.ellipse([20, 20, 180, 180], fill='#2d2d44')
+                    draw.text((70, 85), "USER", fill='white', font=ImageFont.load_default())
                     os.makedirs("EsproChat/assets", exist_ok=True)
-                    default_img.save(default_path)
-                
-                pfp_path = default_path
+                    default_img.save(pfp_path)
                 LOGGER.info(f"Using default PFP: {pfp_path}")
-                
         except Exception as e:
             LOGGER.error(f"Error downloading PFP: {e}")
             pfp_path = "EsproChat/assets/upic.png"
@@ -325,7 +188,7 @@ async def greet_new_member(client, member: ChatMemberUpdated):
             )
             
             if not os.path.exists(image_path):
-                raise Exception(f"Image creation failed: {image_path}")
+                raise Exception("Image creation failed")
             
             LOGGER.info(f"Created welcome image: {image_path}")
             
@@ -339,31 +202,27 @@ async def greet_new_member(client, member: ChatMemberUpdated):
         if chat.id in temp.last:
             try:
                 await temp.last[chat.id].delete()
-            except Exception as e:
-                LOGGER.warning(f"Error deleting old welcome: {e}")
-        
-        # Get bot info for button
-        try:
-            me = await client.get_me()
-            bot_username = me.username
-            bot_name = me.first_name
-        except Exception as e:
-            LOGGER.error(f"Error getting bot info: {e}")
-            bot_username = "unknown_bot"
-            bot_name = "EsproChat"
+            except:
+                pass
         
         # Prepare caption
         caption = f"""
 **🎉 Welcome to {chat.title}! 🎉**
 
-**✨ New Member Details:**
-• **Name:** {user.mention()}
-• **ID:** `{user.id}`
-• **Username:** @{user.username or 'Not Set'}
-• **Total Members:** `{count}`
+**👤 New Member:** {user.mention()}
+**🆔 ID:** `{user.id}`
+**📱 Username:** @{user.username or 'Not Set'}
+**👥 Total Members:** `{count}`
 
-Enjoy your stay! Feel free to introduce yourself. 😊
+Enjoy your stay! 😊
 """
+        
+        # Get bot username for button
+        try:
+            me = await client.get_me()
+            bot_username = me.username
+        except:
+            bot_username = app.username if hasattr(app, 'username') else "unknown_bot"
         
         # Send welcome message
         try:
@@ -372,14 +231,8 @@ Enjoy your stay! Feel free to introduce yourself. 😊
                 photo=image_path,
                 caption=caption,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(
-                        "🤖 Add Bot to Group", 
-                        url=f"https://t.me/{bot_username}?startgroup=true"
-                    )],
-                    [InlineKeyboardButton(
-                        "📢 Updates Channel", 
-                        url="https://t.me/EsproUpdate"
-                    )]
+                    [InlineKeyboardButton("🤖 Add Bot", url=f"https://t.me/{bot_username}?startgroup=true")],
+                    [InlineKeyboardButton("🌟 Support", url="https://t.me/EsproSupport")]
                 ])
             )
             
@@ -391,18 +244,16 @@ Enjoy your stay! Feel free to introduce yourself. 😊
             # Try text message as fallback
             await send_text_welcome(client, chat.id, user, chat.title, count)
         
-        # Cleanup temporary files
+        # Cleanup
         try:
             # Delete downloaded PFP if it's temporary
             if pfp_path and "temp_pp_" in pfp_path and os.path.exists(pfp_path):
                 os.remove(pfp_path)
             
             # Delete welcome image after delay
-            await asyncio.sleep(10)  # Wait 10 seconds before cleanup
+            await asyncio.sleep(5)
             if os.path.exists(image_path):
                 os.remove(image_path)
-                LOGGER.info(f"Cleaned up image: {image_path}")
-                
         except Exception as e:
             LOGGER.warning(f"Cleanup error: {e}")
             
@@ -417,7 +268,7 @@ async def send_text_welcome(client, chat_id, user, chat_title, count):
             me = await client.get_me()
             bot_username = me.username
         except:
-            bot_username = "unknown_bot"
+            bot_username = app.username if hasattr(app, 'username') else "unknown_bot"
         
         caption = f"""
 **🎉 Welcome to {chat_title}! 🎉**
@@ -442,14 +293,8 @@ We're glad to have you here! Feel free to introduce yourself. 😊
             chat_id=chat_id,
             text=caption,
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(
-                    "🤖 Add Bot to Group", 
-                    url=f"https://t.me/{bot_username}?startgroup=true"
-                )],
-                [InlineKeyboardButton(
-                    "📢 Updates Channel", 
-                    url="https://t.me/EsproUpdate"
-                )]
+                [InlineKeyboardButton("🤖 Add Bot", url=f"https://t.me/{bot_username}?startgroup=true")],
+                [InlineKeyboardButton("🌟 Support", url="https://t.me/EsproSupport")]
             ])
         )
         
@@ -459,46 +304,27 @@ We're glad to have you here! Feel free to introduce yourself. 😊
     except Exception as e:
         LOGGER.error(f"Error sending text welcome: {e}")
 
-# Test command for manual welcome
-@app.on_message(filters.command("testwelcome") & filters.group & filters.user("self"))
+# Debug command to test welcome
+@app.on_message(filters.command("testwelcome") & filters.group)
 async def test_welcome_command(client, message):
-    """Test command to trigger welcome manually (bot owner only)."""
+    """Test command to trigger welcome manually."""
     try:
-        # Simulate new member join with command sender
-        from pyrogram.types import ChatMember
-        
+        # Simulate a new member joining (using the command sender)
         fake_member = ChatMemberUpdated(
             chat=message.chat,
             from_user=message.from_user,
-            date=int(time.time()),
+            date=message.date,
             old_chat_member=None,
-            new_chat_member=ChatMember(
+            new_chat_member=types.ChatMember(
                 user=message.from_user,
                 status=enums.ChatMemberStatus.MEMBER,
-                joined_date=int(time.time()),
                 until_date=None
             )
         )
         
         await greet_new_member(client, fake_member)
+        await message.delete()
         
-        # Delete the test command
-        try:
-            await message.delete()
-        except:
-            pass
-            
     except Exception as e:
         LOGGER.error(f"Test welcome error: {e}")
-        await message.reply(f"❌ Error: {str(e)[:100]}")
-
-# Ping command to check if bot is alive
-@app.on_message(filters.command("ing"))
-async def ping_command(client, message):
-    """Simple ping command."""
-    start_time = time.time()
-    msg = await message.reply("🏓 Pong!")
-    end_time = time.time()
-    await msg.edit(f"🏓 Pong! `{round((end_time - start_time) * 1000, 2)}ms`")
-
-LOGGER.info("Welcome module loaded successfully!")
+        await message.reply(f"Error: {e}")
