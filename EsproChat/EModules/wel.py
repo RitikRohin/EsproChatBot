@@ -103,7 +103,7 @@ def create_simple_welcome_image(pfp_path, user_name, user_id, username, chat_nam
     
     # Add timestamp
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    draw.text((320, info_y + 222), f"Joined: {timestamp}", fill='#aaaaaa', font=font_small)
+    draw.text((320, info_y + 220), f"Joined: {timestamp}", fill='#aaaaaa', font=font_small)
     
     # Save image
     output_path = f"{DOWNLOADS_DIR}/welcome_{user_id}_{int(time.time())}.jpg"
