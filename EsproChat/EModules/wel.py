@@ -99,11 +99,11 @@ def create_simple_welcome_image(pfp_path, user_name, user_id, username, chat_nam
     draw.text((320, info_y + 170), f"👥 Members: {member_count}", fill='#ffa500', font=font_medium)
     
     # Add decorative line
-    draw.line([(300, info_y + 215), (950, info_y + 220)], fill='#FFD700', width=3)
+    draw.line([(300, info_y + 220), (950, info_y + 220)], fill='#FFD700', width=3)
     
     # Add timestamp
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    draw.text((320, info_y + 220), f"Joined: {timestamp}", fill='#aaaaaa', font=font_small)
+    draw.text((320, info_y + 215), f"Joined: {timestamp}", fill='#aaaaaa', font=font_small)
     
     # Save image
     output_path = f"{DOWNLOADS_DIR}/welcome_{user_id}_{int(time.time())}.jpg"
