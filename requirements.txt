@@ -13,7 +13,7 @@ telegram
 Pillow
 aiohttp
 matplotlib
-g4f
+g4f==6.7.1
 moviepy==1.0.3
 gunicorn
 typing_extensions
