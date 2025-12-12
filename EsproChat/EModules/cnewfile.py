@@ -28,7 +28,7 @@ BAD_WORDS = [
     
     # English abusive words
     "fuck", "shit", "bitch", "asshole", "dick", "pussy", "cunt",
-    "bastard", "motherfucker", "whore", "slut", "damn", "hell",
+    "bastard", "motherfucker", "whore", "slut", "damn", "land",
     "dickhead", "prick", "cock", "douche", "wanker", "retard",
     
     # Variations and slang
