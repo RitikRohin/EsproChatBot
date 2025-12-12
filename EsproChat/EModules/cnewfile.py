@@ -297,7 +297,7 @@ async def report_abusive_user(client, message: Message, user_mention: str):
         print(f"🔴 Chat Type: {message.chat.type}")
         
         # Create simple report message
-        report_msg = f"🚨 **REPORT** 🚨\n\n{user_mention} ne mujhe abusive language use ki hai!\n\nGroup admins please take action! ⚠️"
+        report_msg = f"🚨 **REPORT** 🚨\n\n{user_mention} ne mujhe abusive language use ki hai!\n\nGroup @admins please take action! ⚠️"
         
         # Try multiple methods to ensure it sends
         methods_tried = []
