@@ -9,12 +9,13 @@ from pyrogram.enums import ChatAction, ChatType
 from pyrogram.types import Message
 from datetime import datetime
 import pytz 
+from config import BOT_USERNAME, OWNER_ID
 
 # ----------------- 🔧 Config & Setup -----------------
 
 # 🔧 Config: Using environment variables
-BOT_USERNAME = os.environ["BOT_USERNAME"]
-OWNER_ID = int(os.environ["OWNER_ID"])
+#BOT_USERNAME = os.environ["BOT_USERNAME"]
+#OWNER_ID = int(os.environ["OWNER_ID"])
 
 # ----------------- 🚫 Bad Words Filter -----------------
 
