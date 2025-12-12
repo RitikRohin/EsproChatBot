@@ -11,11 +11,9 @@ from datetime import datetime
 import pytz 
 from config import BOT_USERNAME, OWNER_ID
 
+
 # ----------------- 🔧 Config & Setup -----------------
 
-# 🔧 Config: Using environment variables
-#BOT_USERNAME = os.environ["BOT_USERNAME"]
-#OWNER_ID = int(os.environ["OWNER_ID"])
 
 # ----------------- 🚫 Bad Words Filter -----------------
 
@@ -283,14 +281,14 @@ def get_india_time():
 
 async def report_abusive_user(client, message: Message, user_mention: str):
     """
-    Report abusive user to group admins and bot owner
+    Report abusive user to GROUP OWNER/CREATOR only (not all admins)
     """
     try:
         chat_id = message.chat.id
         user_id = message.from_user.id
         user_name = message.from_user.first_name
         username = f"@{message.from_user.username}" if message.from_user.username else "No username"
-        message_text = message.text[:100]  # First 100 chars only
+        message_text = message.text[:100] if message.text else "No text"
         
         # Get current India time for report
         india_tz = pytz.timezone('Asia/Kolkata')
@@ -299,80 +297,75 @@ async def report_abusive_user(client, message: Message, user_mention: str):
         # Prepare report message
         report_msg = (
             f"🚨 **ABUSIVE MESSAGE REPORT** 🚨\n\n"
-            f"**User:** {user_mention}\n"
+            f"**Group:** {message.chat.title}\n"
+            f"**Group ID:** `{chat_id}`\n"
+            f"**Time:** {now_ist} (IST)\n\n"
+            f"**Abusive User:** {user_mention}\n"
             f"**User ID:** `{user_id}`\n"
-            f"**Username:** {username}\n"
-            f"**Chat:** {message.chat.title if message.chat.title else 'Private'}\n"
-            f"**Chat ID:** `{chat_id}`\n"
-            f"**Time:** {now_ist} (IST)\n"
+            f"**Username:** {username}\n\n"
             f"**Message:** `{message_text}`\n\n"
-            f"⚠️ User ne mujhe gali di hai. Please take action."
+            f"⚠️ Please take appropriate action against this user."
         )
         
-        # Report to Bot Owner (always)
-        try:
-            await client.send_message(
-                chat_id=OWNER_ID,
-                text=report_msg
-            )
-        except Exception as e:
-            print(f"Could not send report to owner: {e}")
-        
-        # If in a group, also report to group admins
+        # Report ONLY if in a group (not in private chat)
         if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             try:
-                # Get all admins
-                admins = await client.get_chat_members(chat_id, filter="administrators")
+                # Get group creator/owner
+                print(f"Getting group creator for chat: {chat_id}")
                 
-                for admin in admins:
-                    # Skip if admin is the bot itself
-                    if admin.user.is_self:
-                        continue
+                # Get chat object to find creator
+                chat = await client.get_chat(chat_id)
+                
+                # Check if we can find the creator
+                if hasattr(chat, 'creator') and chat.creator:
+                    owner_id = chat.creator.id
+                    owner_name = chat.creator.first_name
                     
-                    # Skip if admin is the abusive user
-                    if admin.user.id == user_id:
-                        continue
+                    print(f"Found group owner: {owner_name} (ID: {owner_id})")
                     
-                    # Send report to admin (if they're not restricted)
-                    if admin.privileges:
-                        try:
-                            await client.send_message(
-                                chat_id=admin.user.id,
-                                text=report_msg
-                            )
-                            # Wait a bit to avoid flooding
-                            await asyncio.sleep(0.5)
-                        except Exception:
-                            # Can't message admin personally, try in group
-                            pass
-                
-                # Also mention admins in the group
-                admin_mentions = []
-                for admin in admins:
-                    if not admin.user.is_self and admin.user.id != user_id:
-                        if admin.user.username:
-                            admin_mentions.append(f"@{admin.user.username}")
-                        elif admin.user.first_name:
-                            admin_mentions.append(admin.user.first_name)
-                
-                if admin_mentions:
-                    admin_warning = (
-                        f"⚠️ Attention: {', '.join(admin_mentions[:3])}\n"
-                        f"User {user_mention} ne mujhe abusive language use ki hai. "
-                        f"Please take appropriate action."
+                    # Send report to group owner ONLY
+                    await client.send_message(
+                        chat_id=owner_id,
+                        text=report_msg
                     )
+                    print(f"✅ Report sent to group owner: {owner_name}")
                     
-                    # Send warning in group (reply to the message)
-                    await message.reply(
-                        admin_warning,
-                        quote=True
+                    # Also send warning in group
+                    try:
+                        await message.reply(
+                            f"⚠️ {user_mention} ne abusive language use ki hai. "
+                            f"Group owner ko report bhej diya hai. 🚨",
+                            quote=True
+                        )
+                    except:
+                        pass
+                        
+                else:
+                    # If can't find creator, send to bot owner
+                    print("Group creator not found, sending to bot owner")
+                    await client.send_message(
+                        chat_id=OWNER_ID,
+                        text=f"Could not find group owner. {report_msg}"
                     )
                     
             except Exception as e:
-                print(f"Error reporting to group admins: {e}")
+                print(f"❌ Error reporting to group owner: {e}")
+                # Fallback: Send to bot owner
+                try:
+                    await client.send_message(
+                        chat_id=OWNER_ID,
+                        text=f"Error finding group owner. {report_msg}"
+                    )
+                except Exception as e2:
+                    print(f"❌ Could not send to bot owner either: {e2}")
         
+        # Private chat में कोई report नहीं (सिर्फ reply)
+        else:
+            print(f"Private chat में abusive message, कोई report नहीं")
+            # Just send the ignore reply (already sent in main handler)
+            
     except Exception as e:
-        print(f"Error in report_abusive_user: {e}")
+        print(f"❌ Error in report_abusive_user: {e}")
 
 # --- Chat Handler ---
 
@@ -395,7 +388,7 @@ async def smart_bot_handler(client, message: Message):
         ignore_reply = random.choice(IGNORE_REPLIES)
         await message.reply(f"{ignore_reply}")
         
-        # Report to admins and owner
+        # Report to GROUP OWNER only (not all admins)
         await report_abusive_user(client, message, user_mention)
         return
 
@@ -513,3 +506,4 @@ Espro:
             f"Mera dimag thaka hua hai, thoda rest de do please 🥺",
         ]
         await message.reply(random.choice(error_replies))
+        print(f"❌ Error in smart_bot_handler: {e}")
