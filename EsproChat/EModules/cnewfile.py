@@ -5,7 +5,7 @@ import re
 import g4f
 from EsproChat import app
 from pyrogram import filters
-from pyrogram.enums import ChatAction, ChatType
+from pyrogram.enums import ChatAction
 from pyrogram.types import Message
 from datetime import datetime
 import pytz 
@@ -14,6 +14,9 @@ from config import BOT_USERNAME, OWNER_ID
 
 # ----------------- 🔧 Config & Setup -----------------
 
+# Debug print to check values
+print(f"✅ Bot Username: {BOT_USERNAME}")
+print(f"✅ Owner ID: {OWNER_ID} (type: {type(OWNER_ID)})")
 
 # ----------------- 🚫 Bad Words Filter -----------------
 
@@ -243,7 +246,7 @@ def is_message_for_bot(message: Message, bot_username: str) -> bool:
     Returns True if the bot should process the message.
     """
     # Always process in a private chat
-    if message.chat.type.name == "PRIVATE":
+    if message.chat.type == "private":
         return True
 
     # 1. Check reply
@@ -256,7 +259,7 @@ def is_message_for_bot(message: Message, bot_username: str) -> bool:
     # 2. Check mention
     if message.entities and message.text:
         for entity in message.entities:
-            if entity.type.name == "MENTION":
+            if entity.type == "mention":
                 mention_text = message.text[entity.offset : entity.offset + entity.length]
                 # If the mention is NOT the bot's username, ignore.
                 if mention_text.lower() != f"@{bot_username.lower()}":
@@ -281,120 +284,44 @@ def get_india_time():
 
 async def report_abusive_user(client, message: Message, user_mention: str):
     """
-    Report abusive user by mentioning GROUP OWNER in the group itself
+    Simple report function - just mention in group
     """
     try:
-        chat_id = message.chat.id
-        user_id = message.from_user.id
-        user_name = message.from_user.first_name
-        message_text = message.text[:100] if message.text else "No text"
-        
-        # Get current India time for report
-        india_tz = pytz.timezone('Asia/Kolkata')
-        now_ist = datetime.now(india_tz).strftime("%d-%m-%Y %I:%M %p")
-        
-        # Report ONLY if in a group (not in private chat)
-        if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
-            try:
-                print(f"Finding group owner for chat: {chat_id}")
-                
-                owner_mention = ""
-                owner_found = False
-                
-                try:
-                    # Get chat object
-                    chat = await client.get_chat(chat_id)
-                    
-                    # Method 1: Check chat.creator attribute
-                    if hasattr(chat, 'creator') and chat.creator:
-                        if chat.creator.username:
-                            owner_mention = f"@{chat.creator.username}"
-                        else:
-                            owner_mention = chat.creator.first_name
-                        owner_found = True
-                        print(f"Found group owner: {owner_mention}")
-                    
-                    # Method 2: Get admins and find creator
-                    if not owner_found:
-                        admins = []
-                        async for admin in client.get_chat_members(chat_id, filter="administrators"):
-                            admins.append(admin)
-                        
-                        for admin in admins:
-                            if hasattr(admin, 'status') and admin.status == "creator":
-                                if admin.user.username:
-                                    owner_mention = f"@{admin.user.username}"
-                                else:
-                                    owner_mention = admin.user.first_name
-                                owner_found = True
-                                print(f"Found group owner via status: {owner_mention}")
-                                break
-                            
-                except Exception as e:
-                    print(f"Error finding group owner: {e}")
-                
-                if owner_found and owner_mention:
-                    # Send warning in group mentioning owner
-                    warning_msg = (
-                        f"🚨 **Report** 🚨\n\n"
-                        f"**Group Owner:** {owner_mention}\n"
-                        f"**Abusive User:** {user_mention}\n"
-                        f"**Time:** {now_ist}\n\n"
-                        f"**Message:** `{message_text}`\n\n"
-                        f"⚠️ {owner_mention} please take action against {user_mention} for using abusive language."
-                    )
-                    
-                    try:
-                        await message.reply(
-                            warning_msg,
-                            quote=True
-                        )
-                        print(f"✅ Report sent in group mentioning owner: {owner_mention}")
-                        
-                    except Exception as e:
-                        print(f"❌ Could not send detailed report: {e}")
-                        # Simple fallback
-                        await message.reply(
-                            f"⚠️ {owner_mention} {user_mention} ne abusive language use ki hai. Please take action.",
-                            quote=True
-                        )
-                        
-                else:
-                    # If can't find owner, mention "admins"
-                    print("Group owner not found, mentioning admins")
-                    
-                    warning_msg = (
-                        f"🚨 **Report** 🚨\n\n"
-                        f"**Abusive User:** {user_mention}\n"
-                        f"**Time:** {now_ist}\n\n"
-                        f"**Message:** `{message_text}`\n\n"
-                        f"⚠️ **Group Admins** please take action against {user_mention} for using abusive language."
-                    )
-                    
-                    await message.reply(
-                        warning_msg,
-                        quote=True
-                    )
-                    print("✅ Report sent mentioning admins")
-                    
-            except Exception as e:
-                print(f"❌ Error in group reporting: {e}")
-                # Simple warning as fallback
-                try:
-                    await message.reply(
-                        f"⚠️ {user_mention} ne abusive language use ki hai. "
-                        f"Please be respectful in this group. 🚫",
-                        quote=True
-                    )
-                except:
-                    pass
-        
-        # Private chat में कोई report नहीं
-        else:
-            print(f"Private chat में abusive message, कोई report नहीं")
+        # सिर्फ group में warning दें
+        if hasattr(message.chat, 'type') and message.chat.type in ["group", "supergroup"]:
+            
+            # Get group title
+            group_title = message.chat.title if hasattr(message.chat, 'title') else "this group"
+            
+            # Get time
+            india_tz = pytz.timezone('Asia/Kolkata')
+            current_time = datetime.now(india_tz).strftime('%I:%M %p')
+            
+            # Simple report message
+            report_msg = (
+                f"🚨 **Attention Group Admins/Owner!** 🚨\n\n"
+                f"**User:** {user_mention}\n"
+                f"**Group:** {group_title}\n"
+                f"**Time:** {current_time}\n\n"
+                f"⚠️ This user has used abusive language. Please take appropriate action."
+            )
+            
+            await message.reply(
+                report_msg,
+                quote=True
+            )
+            print(f"✅ Report sent in group for abusive message from {user_mention}")
             
     except Exception as e:
         print(f"❌ Error in report_abusive_user: {e}")
+        # Fallback
+        try:
+            await message.reply(
+                f"⚠️ Abusive language detected. Admins have been notified.",
+                quote=True
+            )
+        except:
+            pass
 
 # --- Chat Handler ---
 
@@ -417,7 +344,7 @@ async def smart_bot_handler(client, message: Message):
         ignore_reply = random.choice(IGNORE_REPLIES)
         await message.reply(f"{ignore_reply}")
         
-        # Report in group by mentioning group owner
+        # Report in group
         await report_abusive_user(client, message, user_mention)
         return
 
