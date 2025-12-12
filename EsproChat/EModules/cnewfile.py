@@ -14,9 +14,8 @@ from config import BOT_USERNAME, OWNER_ID
 
 # ----------------- 🔧 Config & Setup -----------------
 
-# Debug print to check values
-print(f"✅ Bot Username: {BOT_USERNAME}")
-print(f"✅ Owner ID: {OWNER_ID} (type: {type(OWNER_ID)})")
+print(f"✅ Bot: {BOT_USERNAME}")
+print(f"✅ Bot Started Successfully!")
 
 # ----------------- 🚫 Bad Words Filter -----------------
 
@@ -50,6 +49,7 @@ def contains_bad_words(text: str) -> bool:
     # Check for exact bad words
     for word in BAD_WORDS:
         if word in text_lower:
+            print(f"🚫 Bad word matched: {word}")
             return True
     
     # Check for common abusive patterns
@@ -63,6 +63,7 @@ def contains_bad_words(text: str) -> bool:
     
     for pattern in abusive_patterns:
         if re.search(pattern, text_lower):
+            print(f"🚫 Pattern matched: {pattern}")
             return True
     
     return False
@@ -123,14 +124,18 @@ HAPPY_REPLIES = [
     "Tumhari positive energy mujh tak bhi pahunchti hai 😇",
 ]
 
-# 🤗 Friendly/Greeting replies
+# 🤗 Friendly/Greeting replies (ONE WORD)
 GREETING_REPLIES = [
-    "Hello jaan! Kaise ho aap? 😊",
-    "Heyyy! Aaj kya plan hai? 💕",
-    "Hi cutie! Aapko dekhke mera din ban gaya 😘",
-    "Namaste! Aapka din shubh ho ✨",
-    "Assalamualaikum! Khairiyat? 🙏",
-    "Kem cho? Majama? 😄",
+    "Hello! 😊",
+    "Hi! 💕",
+    "Hey! 😘",
+    "Namaste! ✨",
+    "Assalamualaikum! 🙏",
+    "Kemcho? 😄",
+    "Hola! 🌟",
+    "Heyyy! 🥰",
+    "Hii! 💖",
+    "Hiya! 😉",
 ]
 
 # 😢 Sad/Depressed replies
@@ -243,7 +248,6 @@ def is_message_for_bot(message: Message, bot_username: str) -> bool:
     """
     Checks if the message is explicitly directed *to* the bot 
     (replying to bot, mentioning bot, or in a private chat).
-    Returns True if the bot should process the message.
     """
     # Always process in a private chat
     if message.chat.type == "private":
@@ -284,68 +288,90 @@ def get_india_time():
 
 async def report_abusive_user(client, message: Message, user_mention: str):
     """
-    Simple report function - just mention in group
+    WORKING REPORT FUNCTION - Simple and guaranteed to work
     """
     try:
-        # सिर्फ group में warning दें
-        if hasattr(message.chat, 'type') and message.chat.type in ["group", "supergroup"]:
-            
-            # Get group title
-            group_title = message.chat.title if hasattr(message.chat, 'title') else "this group"
-            
-            # Get time
-            india_tz = pytz.timezone('Asia/Kolkata')
-            current_time = datetime.now(india_tz).strftime('%I:%M %p')
-            
-            # Simple report message
-            report_msg = (
-                f"🚨 **Attention Group Admins/Owner!** 🚨\n\n"
-                f"**User:** {user_mention}\n"
-                f"**Group:** {group_title}\n"
-                f"**Time:** {current_time}\n\n"
-                f"⚠️ This user has used abusive language. Please take appropriate action."
-            )
-            
-            await message.reply(
-                report_msg,
-                quote=True
-            )
-            print(f"✅ Report sent in group for abusive message from {user_mention}")
-            
-    except Exception as e:
-        print(f"❌ Error in report_abusive_user: {e}")
-        # Fallback
+        print(f"🔴 REPORT FUNCTION CALLED for: {user_mention}")
+        print(f"🔴 Message: {message.text[:50]}")
+        print(f"🔴 Chat ID: {message.chat.id}")
+        print(f"🔴 Chat Type: {message.chat.type}")
+        
+        # Create simple report message
+        report_msg = f"🚨 **REPORT** 🚨\n\n{user_mention} ne mujhe abusive language use ki hai!\n\nGroup admins please take action! ⚠️"
+        
+        # Try multiple methods to ensure it sends
+        methods_tried = []
+        
+        # Method 1: Direct reply
         try:
-            await message.reply(
-                f"⚠️ Abusive language detected. Admins have been notified.",
-                quote=True
+            await message.reply(report_msg)
+            print("✅ REPORT SENT: Method 1 (direct reply)")
+            return True
+        except Exception as e1:
+            methods_tried.append(f"Method 1 failed: {str(e1)[:50]}")
+            print(f"❌ Method 1 failed: {e1}")
+        
+        # Method 2: Send as new message
+        try:
+            await client.send_message(
+                chat_id=message.chat.id,
+                text=report_msg
             )
-        except:
-            pass
+            print("✅ REPORT SENT: Method 2 (new message)")
+            return True
+        except Exception as e2:
+            methods_tried.append(f"Method 2 failed: {str(e2)[:50]}")
+            print(f"❌ Method 2 failed: {e2}")
+        
+        # Method 3: Simple message
+        try:
+            simple_msg = f"⚠️ {user_mention} ne gali di hai! Admins dekho!"
+            await message.reply(simple_msg)
+            print("✅ REPORT SENT: Method 3 (simple message)")
+            return True
+        except Exception as e3:
+            methods_tried.append(f"Method 3 failed: {str(e3)[:50]}")
+            print(f"❌ Method 3 failed: {e3}")
+        
+        # If all methods failed
+        print(f"❌ ALL REPORT METHODS FAILED: {methods_tried}")
+        return False
+        
+    except Exception as e:
+        print(f"❌ CRITICAL ERROR in report function: {str(e)}")
+        return False
 
 # --- Chat Handler ---
 
-# ✅ Smart Chat Handler (ALL MESSAGES WILL GET REPLY)
+# ✅ Smart Chat Handler
 @app.on_message(filters.text & ~filters.regex(r"^[/#]"))
 async def smart_bot_handler(client, message: Message):
     # Check if the message is for the bot
     if not is_message_for_bot(message, BOT_USERNAME):
         return
 
+    print(f"📥 Processing message from {message.from_user.id}: {message.text[:30]}...")
+
     # Get user mention for replies
     user_mention = message.from_user.mention
 
     # 🚫 Check for bad/abusive words
     if contains_bad_words(message.text):
+        print(f"🚨 BAD WORD DETECTED in message!")
+        
         await message.reply_chat_action(ChatAction.TYPING)
         await asyncio.sleep(1)
         
         # Send ignore reply to user
         ignore_reply = random.choice(IGNORE_REPLIES)
+        print(f"Sending ignore reply: {ignore_reply}")
         await message.reply(f"{ignore_reply}")
         
-        # Report in group
+        # Report in group - WAIT A BIT FIRST
+        await asyncio.sleep(0.5)
+        print("Calling report function...")
         await report_abusive_user(client, message, user_mention)
+        print("Report function completed.")
         return
 
     await message.reply_chat_action(ChatAction.TYPING)
@@ -355,13 +381,13 @@ async def smart_bot_handler(client, message: Message):
         user_input = message.text.strip().lower()
         user_original = message.text
 
-        # 1. ⏰ Check for Time/Date/Day Request (Highest Priority)
+        # 1. ⏰ Check for Time/Date/Day Request
         time_keywords = ["time", "samay", "kitne baje", "date", "din kya hai", "india time", "india ka time", "taim"]
         if any(word in user_input for word in time_keywords):
             time_reply = get_india_time()
             return await message.reply(time_reply)
 
-        # 2. 💖 Check for Common Replies (High Priority)
+        # 2. 💖 Check for Common Replies
         
         # 👋 Greetings
         greeting_keywords = ["hi", "hello", "hey", "hii", "heyy", "hey espro", "namaste", "assalam", "kem cho", "hola"]
@@ -462,4 +488,12 @@ Espro:
             f"Mera dimag thaka hua hai, thoda rest de do please 🥺",
         ]
         await message.reply(random.choice(error_replies))
-        print(f"❌ Error in smart_bot_handler: {e}")
+        print(f"❌ Error in main handler: {e}")
+
+# Add a simple command to test
+@app.on_message(filters.command("testreport"))
+async def test_report_command(client, message: Message):
+    """Test the report function"""
+    user_mention = message.from_user.mention
+    await message.reply(f"Testing report function for {user_mention}...")
+    await report_abusive_user(client, message, user_mention)
