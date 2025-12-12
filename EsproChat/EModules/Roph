@@ -281,88 +281,117 @@ def get_india_time():
 
 async def report_abusive_user(client, message: Message, user_mention: str):
     """
-    Report abusive user to GROUP OWNER/CREATOR only (not all admins)
+    Report abusive user by mentioning GROUP OWNER in the group itself
     """
     try:
         chat_id = message.chat.id
         user_id = message.from_user.id
         user_name = message.from_user.first_name
-        username = f"@{message.from_user.username}" if message.from_user.username else "No username"
         message_text = message.text[:100] if message.text else "No text"
         
         # Get current India time for report
         india_tz = pytz.timezone('Asia/Kolkata')
         now_ist = datetime.now(india_tz).strftime("%d-%m-%Y %I:%M %p")
         
-        # Prepare report message
-        report_msg = (
-            f"🚨 **ABUSIVE MESSAGE REPORT** 🚨\n\n"
-            f"**Group:** {message.chat.title}\n"
-            f"**Group ID:** `{chat_id}`\n"
-            f"**Time:** {now_ist} (IST)\n\n"
-            f"**Abusive User:** {user_mention}\n"
-            f"**User ID:** `{user_id}`\n"
-            f"**Username:** {username}\n\n"
-            f"**Message:** `{message_text}`\n\n"
-            f"⚠️ Please take appropriate action against this user."
-        )
-        
         # Report ONLY if in a group (not in private chat)
         if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             try:
-                # Get group creator/owner
-                print(f"Getting group creator for chat: {chat_id}")
+                print(f"Finding group owner for chat: {chat_id}")
                 
-                # Get chat object to find creator
-                chat = await client.get_chat(chat_id)
+                owner_mention = ""
+                owner_found = False
                 
-                # Check if we can find the creator
-                if hasattr(chat, 'creator') and chat.creator:
-                    owner_id = chat.creator.id
-                    owner_name = chat.creator.first_name
+                try:
+                    # Get chat object
+                    chat = await client.get_chat(chat_id)
                     
-                    print(f"Found group owner: {owner_name} (ID: {owner_id})")
+                    # Method 1: Check chat.creator attribute
+                    if hasattr(chat, 'creator') and chat.creator:
+                        if chat.creator.username:
+                            owner_mention = f"@{chat.creator.username}"
+                        else:
+                            owner_mention = chat.creator.first_name
+                        owner_found = True
+                        print(f"Found group owner: {owner_mention}")
                     
-                    # Send report to group owner ONLY
-                    await client.send_message(
-                        chat_id=owner_id,
-                        text=report_msg
+                    # Method 2: Get admins and find creator
+                    if not owner_found:
+                        admins = []
+                        async for admin in client.get_chat_members(chat_id, filter="administrators"):
+                            admins.append(admin)
+                        
+                        for admin in admins:
+                            if hasattr(admin, 'status') and admin.status == "creator":
+                                if admin.user.username:
+                                    owner_mention = f"@{admin.user.username}"
+                                else:
+                                    owner_mention = admin.user.first_name
+                                owner_found = True
+                                print(f"Found group owner via status: {owner_mention}")
+                                break
+                            
+                except Exception as e:
+                    print(f"Error finding group owner: {e}")
+                
+                if owner_found and owner_mention:
+                    # Send warning in group mentioning owner
+                    warning_msg = (
+                        f"🚨 **Report** 🚨\n\n"
+                        f"**Group Owner:** {owner_mention}\n"
+                        f"**Abusive User:** {user_mention}\n"
+                        f"**Time:** {now_ist}\n\n"
+                        f"**Message:** `{message_text}`\n\n"
+                        f"⚠️ {owner_mention} please take action against {user_mention} for using abusive language."
                     )
-                    print(f"✅ Report sent to group owner: {owner_name}")
                     
-                    # Also send warning in group
                     try:
                         await message.reply(
-                            f"⚠️ {user_mention} ne abusive language use ki hai. "
-                            f"Group owner ko report bhej diya hai. 🚨",
+                            warning_msg,
                             quote=True
                         )
-                    except:
-                        pass
+                        print(f"✅ Report sent in group mentioning owner: {owner_mention}")
+                        
+                    except Exception as e:
+                        print(f"❌ Could not send detailed report: {e}")
+                        # Simple fallback
+                        await message.reply(
+                            f"⚠️ {owner_mention} {user_mention} ne abusive language use ki hai. Please take action.",
+                            quote=True
+                        )
                         
                 else:
-                    # If can't find creator, send to bot owner
-                    print("Group creator not found, sending to bot owner")
-                    await client.send_message(
-                        chat_id=OWNER_ID,
-                        text=f"Could not find group owner. {report_msg}"
+                    # If can't find owner, mention "admins"
+                    print("Group owner not found, mentioning admins")
+                    
+                    warning_msg = (
+                        f"🚨 **Report** 🚨\n\n"
+                        f"**Abusive User:** {user_mention}\n"
+                        f"**Time:** {now_ist}\n\n"
+                        f"**Message:** `{message_text}`\n\n"
+                        f"⚠️ **Group Admins** please take action against {user_mention} for using abusive language."
                     )
                     
-            except Exception as e:
-                print(f"❌ Error reporting to group owner: {e}")
-                # Fallback: Send to bot owner
-                try:
-                    await client.send_message(
-                        chat_id=OWNER_ID,
-                        text=f"Error finding group owner. {report_msg}"
+                    await message.reply(
+                        warning_msg,
+                        quote=True
                     )
-                except Exception as e2:
-                    print(f"❌ Could not send to bot owner either: {e2}")
+                    print("✅ Report sent mentioning admins")
+                    
+            except Exception as e:
+                print(f"❌ Error in group reporting: {e}")
+                # Simple warning as fallback
+                try:
+                    await message.reply(
+                        f"⚠️ {user_mention} ne abusive language use ki hai. "
+                        f"Please be respectful in this group. 🚫",
+                        quote=True
+                    )
+                except:
+                    pass
         
-        # Private chat में कोई report नहीं (सिर्फ reply)
+        # Private chat में कोई report नहीं
         else:
             print(f"Private chat में abusive message, कोई report नहीं")
-            # Just send the ignore reply (already sent in main handler)
             
     except Exception as e:
         print(f"❌ Error in report_abusive_user: {e}")
@@ -388,7 +417,7 @@ async def smart_bot_handler(client, message: Message):
         ignore_reply = random.choice(IGNORE_REPLIES)
         await message.reply(f"{ignore_reply}")
         
-        # Report to GROUP OWNER only (not all admins)
+        # Report in group by mentioning group owner
         await report_abusive_user(client, message, user_mention)
         return
 
@@ -483,27 +512,4 @@ Espro:
         final_answer = response.strip()
 
         if final_answer:
-            # Double check if AI response doesn't contain bad words
-            if not contains_bad_words(final_answer):
-                await message.reply(final_answer)
-            else:
-                await message.reply("I prefer to keep our conversation positive and respectful! 💖")
-        else:
-            # Fallback reply if AI fails
-            fallback_replies = [
-                f"Hmm... interesting! {user_mention} 😊",
-                f"Accha jaan! Tell me more 💕",
-                f"Tumhare saath baat karke accha lagta hai 😘",
-                f"Mujhe ye topic pasand hai! Continue... ✨",
-            ]
-            await message.reply(random.choice(fallback_replies))
-
-    except Exception as e:
-        # Error fallback
-        error_replies = [
-            f"Sorry {user_mention}, thoda technical issue aa raha hai 😔",
-            f"Oops! Kuch gadbad ho gayi, phir try karo? 💖",
-            f"Mera dimag thaka hua hai, thoda rest de do please 🥺",
-        ]
-        await message.reply(random.choice(error_replies))
-        print(f"❌ Error in smart_bot_handler: {e}")
+            # Double check if A
